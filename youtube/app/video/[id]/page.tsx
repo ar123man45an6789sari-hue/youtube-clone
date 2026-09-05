@@ -3,6 +3,7 @@ import VideoCard from "../../components/VideoCard";
 import VideoActions from "../../components/VideoActions";
 import CommentSection from "../../components/CommentSection";
 import Link from "next/link";
+import CustomVideoPlayer from "../../components/CustomVideoPlayer";
 import SubscribeButton from "../../components/SubscribeButton";
 
 type Props = {
@@ -43,9 +44,7 @@ const VideoPage = async ({ params }: Props) => {
   return (
     <main className="mx-auto max-w-7xl p-6 lg:grid lg:grid-cols-3 lg:gap-6">
       <div className="lg:col-span-2">
-        <video controls className="aspect-video w-full rounded-xl bg-black">
-          <source src={video.videoUrl} type="video/mp4" />
-        </video>
+     <CustomVideoPlayer videoUrl={video.videoUrl} videoId={video._id} />
 
         <h1 className="mt-4 text-xl font-semibold">{video.title}</h1>
 
