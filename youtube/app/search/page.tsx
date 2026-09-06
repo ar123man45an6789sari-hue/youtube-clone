@@ -39,6 +39,7 @@ const SearchPage = async ({ searchParams }: Props) => {
               key={video._id}
               id={video._id}
               title={video.title}
+              thumbnail={video.thumbnail}
               channel={video.channel?.name || "Unknown Channel"}
               views={`${video.views || 0} views`}
               time={new Date(video.createdAt).toLocaleDateString()}

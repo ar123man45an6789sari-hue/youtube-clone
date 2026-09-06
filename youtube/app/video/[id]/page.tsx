@@ -44,7 +44,7 @@ const VideoPage = async ({ params }: Props) => {
   return (
     <main className="mx-auto max-w-7xl p-6 lg:grid lg:grid-cols-3 lg:gap-6">
       <div className="lg:col-span-2">
-     <CustomVideoPlayer videoUrl={video.videoUrl} videoId={video._id} />
+        <CustomVideoPlayer videoUrl={video.videoUrl} videoId={video._id} thumbnail={video.thumbnail} />
 
         <h1 className="mt-4 text-xl font-semibold">{video.title}</h1>
 
@@ -99,6 +99,7 @@ const VideoPage = async ({ params }: Props) => {
               key={v._id}
               id={v._id}
               title={v.title}
+              thumbnail={v.thumbnail}
               channel={v.channel?.name || "Unknown"}
               views={`${v.views || 0} views`}
               time={new Date(v.createdAt).toLocaleDateString()}

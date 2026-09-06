@@ -49,6 +49,7 @@ const WatchLaterPage = () => {
             <VideoCard
               key={video._id}
               id={video._id}
+              thumbnail={video.thumbnail}
               title={video.title}
               channel={video.channel?.name || "Unknown Channel"}
               views={`${video.views || 0} views`}

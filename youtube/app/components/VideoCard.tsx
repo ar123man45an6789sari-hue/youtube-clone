@@ -1,20 +1,22 @@
 import Link from "next/link";
 
 type VideoCardProps = {
-  id: number;
+  id: string | number;
   title: string;
   channel: string;
   views: string;
   time: string;
   seed: number;
+  thumbnail?: string; // real thumbnail from database (optional)
 };
 
-const VideoCard = ({ id, title, channel, views, time, seed }: VideoCardProps) => {
+const VideoCard = ({ id, title, channel, views, time, seed, thumbnail }: VideoCardProps) => {
   return (
     <Link href={`/video/${id}`} className="block cursor-pointer space-y-2">
       <div className="aspect-video w-full overflow-hidden rounded-xl bg-gray-200">
+        {/* Show the real thumbnail if available, otherwise a placeholder */}
         <img
-          src={`https://picsum.photos/seed/${seed}/640/360`}
+          src={thumbnail || `https://picsum.photos/seed/${seed}/640/360`}
           alt={title}
           className="h-full w-full object-cover transition-transform hover:scale-105"
         />

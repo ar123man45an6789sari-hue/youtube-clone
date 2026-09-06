@@ -17,6 +17,7 @@ import {
 type CustomVideoPlayerProps = {
   videoUrl: string;
   videoId: string;
+  thumbnail?: string;
 };
 
 // Helper: converts seconds into 1:05 style time
@@ -30,7 +31,7 @@ const formatTime = (seconds: number) => {
 // All playback speeds we want to support
 const SPEEDS = [0.5, 1, 1.25, 1.5, 2];
 
-const CustomVideoPlayer = ({ videoUrl, videoId }: CustomVideoPlayerProps) => {
+const CustomVideoPlayer = ({ videoUrl, videoId, thumbnail }: CustomVideoPlayerProps) => {
   // refs = direct connection to the real video element and outer box
   const videoRef = useRef<HTMLVideoElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -230,6 +231,7 @@ const CustomVideoPlayer = ({ videoUrl, videoId }: CustomVideoPlayerProps) => {
       <video
         ref={videoRef}
         src={videoUrl}
+         poster={thumbnail || undefined}
         className="h-full w-full"
         onClick={togglePlay}
         onLoadedMetadata={onLoadedMetadata}
