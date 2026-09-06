@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Play,
   Pause,
@@ -12,12 +13,20 @@ import {
   FastForward,
   PictureInPicture2,
   MonitorPlay,
+  Subtitles,
 } from "lucide-react";
+
+type NextVideo = {
+  id: string;
+  title: string;
+};
 
 type CustomVideoPlayerProps = {
   videoUrl: string;
   videoId: string;
-  thumbnail?: string;
+  thumbnail?: string; // real thumbnail shown as poster before the video plays
+  nextVideo?: NextVideo | null; // used for the autoplay countdown
+  onTheaterChange?: (on: boolean) => void; // tells the page layout about theater mode
 };
 
 // Helper: converts seconds into 1:05 style time
@@ -31,7 +40,15 @@ const formatTime = (seconds: number) => {
 // All playback speeds we want to support
 const SPEEDS = [0.5, 1, 1.25, 1.5, 2];
 
-const CustomVideoPlayer = ({ videoUrl, videoId, thumbnail }: CustomVideoPlayerProps) => {
+const CustomVideoPlayer = ({
+  videoUrl,
+  videoId,
+  thumbnail,
+  nextVideo,
+  onTheaterChange,
+}: CustomVideoPlayerProps) => {
+  const router = useRouter();
+
   // refs = direct connection to the real video element and outer box
   const videoRef = useRef<HTMLVideoElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -49,6 +66,10 @@ const CustomVideoPlayer = ({ videoUrl, videoId, thumbnail }: CustomVideoPlayerPr
   const [theater, setTheater] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showControls, setShowControls] = useState(true);
+  const [ccOn, setCcOn] = useState(false); // subtitles on/off
+  const [quality, setQuality] = useState(""); // e.g. "720p"
+  const [countdown, setCountdown] = useState<number | null>(null); // autoplay timer
+  const [hoverInfo, setHoverInfo] = useState<{ x: number; time: number } | null>(null);
 
   /* ---------- basic controls ---------- */
 
@@ -115,6 +136,27 @@ const CustomVideoPlayer = ({ videoUrl, videoId, thumbnail }: CustomVideoPlayerPr
     }
   };
 
+  // turn subtitles (captions) on/off
+  const toggleCaptions = () => {
+    const video = videoRef.current;
+    if (!video || video.textTracks.length === 0) return;
+    const track = video.textTracks[0];
+    const nextOn = !ccOn;
+    track.mode = nextOn ? "showing" : "hidden";
+    setCcOn(nextOn);
+  };
+
+  // theater mode: player tells the page so the whole layout can go wide
+  const toggleTheater = () => {
+    setTheater(!theater);
+    if (onTheaterChange) onTheaterChange(!theater);
+  };
+
+  // go to the next video (used by countdown and N shortcut)
+  const playNext = () => {
+    if (nextVideo) router.push(`/video/${nextVideo.id}`);
+  };
+
   /* ---------- controls auto hide after 3 seconds ---------- */
 
   const wakeUpControls = () => {
@@ -155,16 +197,20 @@ const CustomVideoPlayer = ({ videoUrl, videoId, thumbnail }: CustomVideoPlayerPr
       } else if (e.key === "f") {
         toggleFullscreen();
       } else if (e.key === "t") {
-        setTheater(!theater);
+        toggleTheater();
       } else if (e.key === "p") {
         togglePiP();
+      } else if (e.key === "c") {
+        toggleCaptions();
+      } else if (e.key === "n") {
+        playNext();
       }
       wakeUpControls();
     };
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [volume, theater, speedIndex]);
+  }, [volume, theater, speedIndex, ccOn, nextVideo]);
 
   /* ---------- keep fullscreen state in sync ---------- */
 
@@ -174,6 +220,19 @@ const CustomVideoPlayer = ({ videoUrl, videoId, thumbnail }: CustomVideoPlayerPr
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
 
+  /* ---------- autoplay countdown: 5..4..3..2..1..0 -> next video ---------- */
+
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown === 0) {
+      setCountdown(null);
+      playNext();
+      return;
+    }
+    const t = setTimeout(() => setCountdown(countdown - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown]);
+
   /* ---------- video events ---------- */
 
   // runs once when video info (duration etc.) is ready
@@ -181,6 +240,9 @@ const CustomVideoPlayer = ({ videoUrl, videoId, thumbnail }: CustomVideoPlayerPr
     const video = videoRef.current;
     if (!video) return;
     setDuration(video.duration);
+
+    // show real video quality info (e.g. 720p)
+    setQuality(video.videoHeight ? `${video.videoHeight}p` : "Auto");
 
     // resume from last watched position
     const saved = localStorage.getItem(`progress-${videoId}`);
@@ -220,25 +282,41 @@ const CustomVideoPlayer = ({ videoUrl, videoId, thumbnail }: CustomVideoPlayerPr
     }
   };
 
+  // video finished -> start the 5 second autoplay countdown
+  const onEnded = () => {
+    setPlaying(false);
+    setShowControls(true);
+    if (nextVideo) setCountdown(5);
+  };
+
+  // hover preview: show the time at the cursor position on the timeline
+  const handleTimelineHover = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    setHoverInfo({ x: ratio * rect.width, time: ratio * duration });
+  };
+
   return (
     <div
       ref={boxRef}
       onMouseMove={wakeUpControls}
       className={`relative overflow-hidden rounded-xl bg-black ${
-        isFullscreen ? "h-full" : theater ? "h-[70vh]" : "aspect-video"
+        isFullscreen ? "h-full" : "aspect-video"
       } ${showControls ? "" : "cursor-none"}`}
     >
       <video
         ref={videoRef}
         src={videoUrl}
-         poster={thumbnail || undefined}
+        poster={thumbnail || undefined}
         className="h-full w-full"
         onClick={togglePlay}
         onLoadedMetadata={onLoadedMetadata}
         onTimeUpdate={onTimeUpdate}
         onProgress={onProgress}
+        onEnded={onEnded}
         onPlay={() => {
           setPlaying(true);
+          setCountdown(null); // user manually played -> stop countdown
           wakeUpControls();
         }}
         onPause={() => {
@@ -248,7 +326,10 @@ const CustomVideoPlayer = ({ videoUrl, videoId, thumbnail }: CustomVideoPlayerPr
         onWaiting={() => setLoading(true)}
         onPlaying={() => setLoading(false)}
         onCanPlay={() => setLoading(false)}
-      />
+      >
+        {/* demo captions file - CC button controls it */}
+        <track src="/subtitles/demo.vtt" kind="subtitles" srcLang="en" label="English" />
+      </video>
 
       {/* loading spinner */}
       {loading && (
@@ -258,7 +339,7 @@ const CustomVideoPlayer = ({ videoUrl, videoId, thumbnail }: CustomVideoPlayerPr
       )}
 
       {/* big play button when video is paused */}
-      {!playing && !loading && (
+      {!playing && !loading && countdown === null && (
         <button
           onClick={togglePlay}
           className="absolute inset-0 flex items-center justify-center bg-black/40"
@@ -267,6 +348,30 @@ const CustomVideoPlayer = ({ videoUrl, videoId, thumbnail }: CustomVideoPlayerPr
             <Play size={28} />
           </div>
         </button>
+      )}
+
+      {/* autoplay countdown overlay (after video ends) */}
+      {countdown !== null && nextVideo && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70">
+          <div className="w-72 rounded-xl bg-gray-900 p-4 text-white shadow-xl">
+            <p className="text-xs text-gray-400">Up next in {countdown}s</p>
+            <p className="mt-1 line-clamp-2 text-sm font-medium">{nextVideo.title}</p>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={playNext}
+                className="flex-1 rounded-full bg-red-600 py-1.5 text-sm font-medium hover:bg-red-700"
+              >
+                Play Now
+              </button>
+              <button
+                onClick={() => setCountdown(null)}
+                className="flex-1 rounded-full bg-white/10 py-1.5 text-sm hover:bg-white/20"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* bottom controls bar */}
@@ -283,21 +388,35 @@ const CustomVideoPlayer = ({ videoUrl, videoId, thumbnail }: CustomVideoPlayerPr
           />
         </div>
 
-        {/* timeline slider (draggable) */}
-        <input
-          type="range"
-          min={0}
-          max={duration || 0}
-          step={0.1}
-          value={currentTime}
-          onChange={(e) => {
-            const video = videoRef.current;
-            if (!video) return;
-            video.currentTime = Number(e.target.value);
-            setCurrentTime(Number(e.target.value));
-          }}
-          className="w-full accent-red-600"
-        />
+        {/* timeline slider (draggable) with hover time preview */}
+        <div
+          className="relative"
+          onMouseMove={handleTimelineHover}
+          onMouseLeave={() => setHoverInfo(null)}
+        >
+          {hoverInfo && (
+            <div
+              className="pointer-events-none absolute -top-7 rounded bg-black/80 px-2 py-0.5 text-xs text-white"
+              style={{ left: hoverInfo.x, transform: "translateX(-50%)" }}
+            >
+              {formatTime(hoverInfo.time)}
+            </div>
+          )}
+          <input
+            type="range"
+            min={0}
+            max={duration || 0}
+            step={0.1}
+            value={currentTime}
+            onChange={(e) => {
+              const video = videoRef.current;
+              if (!video) return;
+              video.currentTime = Number(e.target.value);
+              setCurrentTime(Number(e.target.value));
+            }}
+            className="w-full accent-red-600"
+          />
+        </div>
 
         <div className="mt-1 flex items-center gap-2 text-white">
           <button onClick={togglePlay} title="Play/Pause (Space)">
@@ -334,6 +453,9 @@ const CustomVideoPlayer = ({ videoUrl, videoId, thumbnail }: CustomVideoPlayerPr
 
           <div className="flex-1" />
 
+          {/* real video quality info */}
+          {quality && <span className="text-xs text-white/70">{quality}</span>}
+
           <button
             onClick={changeSpeed}
             title="Playback speed"
@@ -342,7 +464,15 @@ const CustomVideoPlayer = ({ videoUrl, videoId, thumbnail }: CustomVideoPlayerPr
             {SPEEDS[speedIndex]}x
           </button>
 
-          <button onClick={() => setTheater(!theater)} title="Theater mode (T)">
+          <button
+            onClick={toggleCaptions}
+            title="Subtitles (C)"
+            className={ccOn ? "text-red-500" : ""}
+          >
+            <Subtitles size={20} />
+          </button>
+
+          <button onClick={toggleTheater} title="Theater mode (T)">
             <MonitorPlay size={20} />
           </button>
 
