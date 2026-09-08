@@ -31,7 +31,7 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
   const [sort, setSort] = useState("newest");
   const [isLoading, setIsLoading] = useState(false);
 
-  // reply box state (kis comment ko reply kar rahe ho)
+  // reply box state
   const [replyFor, setReplyFor] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
 
@@ -39,8 +39,27 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
   const [editFor, setEditFor] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
 
-  // chhoti error message line
+  // report state
+  const [reportFor, setReportFor] = useState<string | null>(null);
+
+  // translation state (commentId -> translated text)
+  const [translated, setTranslated] = useState<Record<string, string>>({});
+  const [showTrans, setShowTrans] = useState<Record<string, boolean>>({});
+  const [prefLang, setPrefLang] = useState("en");
+
+  // anti-spam captcha state (4th post se aage)
+  const [postCount, setPostCount] = useState(0);
+  const [captchaQ, setCaptchaQ] = useState<string | null>(null);
+  const [captchaA, setCaptchaA] = useState(0);
+  const [captchaInput, setCaptchaInput] = useState("");
+
   const [message, setMessage] = useState("");
+
+  // preferred translation language localStorage se
+  useEffect(() => {
+    const saved = localStorage.getItem("preferredLang");
+    if (saved) setPrefLang(saved);
+  }, []);
 
   // fetch comments when video or sorting changes
   useEffect(() => {
@@ -65,10 +84,31 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
     setTimeout(() => setMessage(""), 3000);
   };
 
+  // simple math captcha generator
+  const makeCaptcha = () => {
+    const a = Math.floor(Math.random() * 9) + 1;
+    const b = Math.floor(Math.random() * 9) + 1;
+    setCaptchaQ(`${a} + ${b} = ?`);
+    setCaptchaA(a + b);
+  };
+
   // post a new top level comment
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newComment.trim() || !user) return;
+
+    // repeated posters ko captcha solve karna padega
+    if (postCount >= 3) {
+      if (!captchaQ) {
+        makeCaptcha();
+        showMessage("Please solve the captcha to continue posting");
+        return;
+      }
+      if (Number(captchaInput) !== captchaA) {
+        showMessage("Wrong captcha answer, try again");
+        return;
+      }
+    }
 
     setIsLoading(true);
     try {
@@ -87,6 +127,11 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
       if (data.success) {
         setComments([data.data, ...comments]);
         setNewComment("");
+        setPostCount(postCount + 1);
+        setCaptchaQ(null);
+        setCaptchaInput("");
+      } else {
+        showMessage(data.message);
       }
     } catch (error) {
       console.error("Failed to post comment:", error);
@@ -117,6 +162,8 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
         setComments([...comments, data.data]);
         setReplyText("");
         setReplyFor(null);
+      } else {
+        showMessage(data.message);
       }
     } catch (error) {
       console.error("Failed to post reply:", error);
@@ -191,16 +238,56 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
     }
   };
 
-  // edit sirf apna comment, wo bhi 10 minute ke andar
+  // report a comment with a reason
+  const submitReport = async (commentId: string, reason: string) => {
+    if (!reason) return;
+
+    try {
+      const res = await fetch(`http://localhost:5000/api/comments/report/${commentId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user?._id || "guest", reason }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showMessage("Comment reported. Moderators will review it.");
+      }
+      setReportFor(null);
+    } catch (error) {
+      console.error("Report failed:", error);
+    }
+  };
+
+     const translateComment = async (c: Comment) => {
+    const key = `${c._id}:${prefLang}`; 
+    if (translated[key]) {
+      setShowTrans({ ...showTrans, [key]: !showTrans[key] });
+      return;
+    }
+
+    try {
+      const url =
+        `https://translate.googleapis.com/translate_a/single?client=gtx` +
+        `&sl=auto&tl=${prefLang}&dt=t&q=${encodeURIComponent(c.text)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const text = data[0].map((part: any) => part[0]).join("");
+      setTranslated({ ...translated, [key]: text });
+      setShowTrans({ ...showTrans, [key]: true });
+    } catch (error) {
+      console.error("Translation failed:", error);
+      showMessage("Translation unavailable right now");
+    }
+  };
+
   const canEdit = (c: Comment) =>
     !!user &&
     c.userId === user._id &&
     (Date.now() - new Date(c.createdAt).getTime()) / 60000 <= EDIT_LIMIT_MIN;
 
-  // delete apna comment kabhi bhi
   const canDelete = (c: Comment) => !!user && c.userId === user._id;
 
-  // ek comment row (top comment aur reply dono ke liye)
   const renderComment = (c: Comment, isReply: boolean) => (
     <div key={c._id} className={`flex gap-3 ${isReply ? "ml-12" : ""}`}>
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-300 text-sm font-medium text-gray-700">
@@ -241,9 +328,16 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
         ) : (
           <p className="mt-1 text-sm text-gray-800">{c.text}</p>
         )}
+                 {/* translated text box (current preferred language) */}
+        {showTrans[`${c._id}:${prefLang}`] && translated[`${c._id}:${prefLang}`] && (
+          <p className="mt-1 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800">
+            {translated[`${c._id}:${prefLang}`]}{" "}
+            <span className="text-xs text-blue-400">(translated)</span>
+          </p>
+        )}
 
         {/* action row */}
-        <div className="mt-1 flex items-center gap-3 text-xs text-gray-600">
+        <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-gray-600">
           <button
             onClick={() => react(c._id, "like")}
             className={user && (c.likes || []).includes(user._id || "") ? "font-semibold text-blue-600" : ""}
@@ -267,6 +361,9 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
               Reply
             </button>
           )}
+             <button onClick={() => translateComment(c)} className="font-medium text-blue-600">
+            {showTrans[`${c._id}:${prefLang}`] ? "Hide translation" : "Translate"}
+          </button>
           {canEdit(c) && editFor !== c._id && (
             <button
               onClick={() => {
@@ -282,6 +379,26 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
             <button onClick={() => removeComment(c._id)} className="font-medium text-red-600">
               Delete
             </button>
+          )}
+          <button
+            onClick={() => setReportFor(reportFor === c._id ? null : c._id)}
+            className="font-medium text-gray-500"
+          >
+            Report
+          </button>
+          {reportFor === c._id && (
+            <select
+              defaultValue=""
+              onChange={(e) => submitReport(c._id, e.target.value)}
+              className="rounded-lg border px-2 py-1 text-xs"
+            >
+              <option value="" disabled>
+                Reason...
+              </option>
+              <option value="spam">Spam</option>
+              <option value="harassment">Harassment</option>
+              <option value="offensive">Offensive content</option>
+            </select>
           )}
         </div>
 
@@ -311,17 +428,30 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
 
   return (
     <div className="mt-8">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">{topComments.length} Comments</h2>
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value)}
-          className="rounded-lg border px-2 py-1 text-sm"
-        >
-          <option value="newest">Newest</option>
-          <option value="oldest">Oldest</option>
-          <option value="mostLiked">Most liked</option>
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            value={prefLang}
+            onChange={(e) => {
+              setPrefLang(e.target.value);
+              localStorage.setItem("preferredLang", e.target.value);
+            }}
+            className="rounded-lg border px-2 py-1 text-sm"
+          >
+            <option value="en">Translate: English</option>
+            <option value="hi">Translate: Hindi</option>
+          </select>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            className="rounded-lg border px-2 py-1 text-sm"
+          >
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="mostLiked">Most liked</option>
+          </select>
+        </div>
       </div>
 
       {message && (
@@ -343,10 +473,27 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
               className="w-full border-b border-gray-300 bg-transparent pb-2 text-sm focus:border-black focus:outline-none transition-colors"
               disabled={isLoading}
             />
+
+            {/* captcha box (4th post se aage dikhta hai) */}
+            {captchaQ && (
+              <div className="mt-2 flex items-center gap-2 rounded-lg bg-yellow-50 px-3 py-2 text-sm">
+                <span className="font-medium">🤖 {captchaQ}</span>
+                <input
+                  value={captchaInput}
+                  onChange={(e) => setCaptchaInput(e.target.value)}
+                  className="w-16 rounded border px-2 py-1 text-sm"
+                />
+              </div>
+            )}
+
             <div className="mt-2 flex justify-end gap-2">
-              <button
+            <button
                 type="button"
-                onClick={() => setNewComment("")}
+                onClick={() => {
+                  setNewComment("");
+                  setCaptchaQ(null);
+                  setCaptchaInput("");
+                }}
                 className="rounded-full px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
                 disabled={isLoading}
               >

@@ -3,6 +3,12 @@ import Comment from "../models/Comment.js";
 // own comment edit karne ka time window (minutes)
 const EDIT_LIMIT_MIN = 10;
 
+// simple bad-words list for the profanity filter
+const BAD_WORDS = [
+  "fuck", "shit", "bitch", "bastard", "asshole",
+  "madarchod", "bhosdike", "chutiya", "randi", "harami", "saala","RASCAL", "CHUTMARIKE","bhosda","chodu","gandu","lodu","lund","loda","lund kaat","lund kaatna","lund kaat ke khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke khanna", "gand",
+];
+
 // helper: purane comments mein likes/dislikes arrays na hon toh bana do
 const safeArrays = (comment) => {
   if (!Array.isArray(comment.likes)) comment.likes = [];
@@ -30,14 +36,54 @@ export const getComments = async (req, res) => {
   }
 };
 
-// create a comment (parentId bhejo toh reply ban jayega)
+// create a comment (with profanity filter, duplicate check and rate limit)
 export const createComment = async (req, res) => {
   try {
     const { videoId, userId, userName, text, parentId } = req.body;
 
+    // 1. profanity filter: abusive language block
+    const cleanText = (text || "").toLowerCase();
+    const hasBadWord = BAD_WORDS.some((word) => cleanText.includes(word));
+    if (hasBadWord) {
+      return res.status(400).json({
+        success: false,
+        message: "Comment blocked: abusive language is not allowed.",
+      });
+    }
+
+    const owner = userId || "";
+
+    // 2. duplicate check: same text by same user within 10 minutes
+    const duplicate = await Comment.findOne({
+      video: videoId,
+      userId: owner,
+      text,
+      createdAt: { $gte: new Date(Date.now() - 10 * 60000) },
+    });
+    if (duplicate) {
+      return res.status(400).json({
+        success: false,
+        message: "Duplicate comment! You already posted this.",
+      });
+    }
+
+    // 3. rate limit: max 3 comments per minute per user
+    const oneMinuteAgo = new Date(Date.now() - 60000);
+    const recentCount = await Comment.countDocuments({
+      video: videoId,
+      userId: owner,
+      createdAt: { $gte: oneMinuteAgo },
+    });
+    if (recentCount >= 3) {
+      return res.status(429).json({
+        success: false,
+        message: "Too many comments! Please wait a minute before posting again.",
+      });
+    }
+
     const newComment = await Comment.create({
       video: videoId,
-      userId: userId || "",
+      userId: owner,
       userName,
       text,
       parentId: parentId || null,
@@ -73,7 +119,7 @@ export const reactComment = async (req, res) => {
     } else {
       my.push(userId);
       const otherIndex = other.indexOf(userId);
-      if (otherIndex > -1) other.splice(otherIndex, 1); // opposite reaction hatao
+      if (otherIndex > -1) other.splice(otherIndex, 1);
     }
 
     await comment.save();
@@ -126,6 +172,40 @@ export const deleteComment = async (req, res) => {
     await Comment.deleteMany({ parentId: comment._id });
     await comment.deleteOne();
     res.status(200).json({ success: true, data: { id: comment._id } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// report a comment (spam / harassment / offensive)
+export const reportComment = async (req, res) => {
+  try {
+    const { userId, reason } = req.body;
+
+    const comment = await Comment.findById(req.params.id);
+    if (!comment) {
+      return res.status(404).json({ success: false, message: "Comment not found" });
+    }
+
+    comment.reports.push({
+      reason,
+      reportedBy: userId || "guest",
+      createdAt: new Date(),
+    });
+    comment.reported = true;
+    await comment.save();
+
+    res.status(200).json({ success: true, data: comment });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// moderation list: saare reported comments (admin page ke liye)
+export const getReportedComments = async (req, res) => {
+  try {
+    const list = await Comment.find({ reported: true }).sort({ updatedAt: -1 }).lean();
+    res.status(200).json({ success: true, data: list });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
