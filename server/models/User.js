@@ -9,18 +9,26 @@ const userSchema = new mongoose.Schema(
     email: {
       type: String,
       required: true,
-      unique: true, // Ek email se do account nahi banenge
+      unique: true,
     },
     password: {
       type: String,
       required: true,
     },
-    avatar: {
+        avatar: {
       type: String,
-      default: "", // Profile photo ka link (baad mein Firebase se aayega)
+      default: "", 
+    },
+    theme: {
+      type: String,
+      default: "dark", // "light" or "dark"
+    },
+    themeAuto: {
+      type: Boolean,
+      default: true,
     },
   },
-  { timestamps: true } // Ye createdAt aur updatedAt ka time khud save karega
+  { timestamps: true } 
 );
 
 const User = mongoose.model("User", userSchema);

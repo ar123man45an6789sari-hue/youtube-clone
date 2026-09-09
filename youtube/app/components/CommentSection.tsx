@@ -97,7 +97,6 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
     e.preventDefault();
     if (!newComment.trim() || !user) return;
 
-    // repeated posters ko captcha solve karna padega
     if (postCount >= 3) {
       if (!captchaQ) {
         makeCaptcha();
@@ -287,8 +286,23 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
     (Date.now() - new Date(c.createdAt).getTime()) / 60000 <= EDIT_LIMIT_MIN;
 
   const canDelete = (c: Comment) => !!user && c.userId === user._id;
+   // highlight @mentions in comment text
+  const renderText = (text: string) => {
+    const parts = text.split(/(@[A-Za-z0-9_]+)/g);
+    return parts.map((part, i) =>
+      part.startsWith("@") ? (
+        <span key={i} className="font-medium text-blue-600">
+          {part}
+        </span>
+      ) : (
+        <span key={i}>{part}</span>
+      )
+    );
+  };
 
+  
   const renderComment = (c: Comment, isReply: boolean) => (
+ 
     <div key={c._id} className={`flex gap-3 ${isReply ? "ml-12" : ""}`}>
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-300 text-sm font-medium text-gray-700">
         {c.userName.charAt(0).toUpperCase()}
@@ -296,8 +310,8 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
       <div className="flex-1">
         <div className="flex items-center gap-2">
           <p className="text-sm font-semibold">{c.userName}</p>
-          <span className="text-xs text-gray-500">
-            {new Date(c.createdAt).toLocaleDateString()}
+         <span className="text-xs text-gray-500">
+            {new Date(c.createdAt).toLocaleString()}
           </span>
           {c.editedAt && <span className="text-xs text-gray-400">(edited)</span>}
         </div>
@@ -326,7 +340,7 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
             </div>
           </div>
         ) : (
-          <p className="mt-1 text-sm text-gray-800">{c.text}</p>
+         <p className="mt-1 text-sm text-gray-800">{renderText(c.text)}</p>
         )}
                  {/* translated text box (current preferred language) */}
         {showTrans[`${c._id}:${prefLang}`] && translated[`${c._id}:${prefLang}`] && (
@@ -450,6 +464,7 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
             <option value="newest">Newest</option>
             <option value="oldest">Oldest</option>
             <option value="mostLiked">Most liked</option>
+            <option value="mostRelevant">Most relevant</option>
           </select>
         </div>
       </div>

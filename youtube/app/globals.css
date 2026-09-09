@@ -81,3 +81,55 @@
     @apply bg-background text-foreground;
   }
 }
+/* ---------- dark mode setup (Task 5) ---------- */
+/* html.dark class ThemeContext toggle karta hai */
+@custom-variant dark (&:where(.dark, .dark *));
+
+.dark body {
+  background-color: #0f0f0f;
+  color: #e5e5e5;
+}
+
+.dark header,
+.dark aside,
+.dark nav {
+  background-color: #1f1f1f !important;
+  color: #e5e5e5;
+  border-color: #333333 !important;
+}
+
+.dark .bg-white {
+  background-color: #1f1f1f !important;
+}
+
+.dark .bg-gray-50,
+.dark .bg-gray-100 {
+  background-color: #262626 !important;
+  color: #e5e5e5;
+}
+
+.dark main .rounded-xl,
+.dark main .rounded-lg {
+  background-color: #181818;
+  border-color: #333333;
+}
+
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: #121212;
+  color: #e5e5e5;
+  border-color: #3f3f3f;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #777777;
+}
+
+.dark .text-gray-500,
+.dark .text-gray-600,
+.dark .text-gray-700,
+.dark .text-gray-800 {
+  color: #bdbdbd !important;
+}

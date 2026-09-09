@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { CheckCircle, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 
 const LoginPage = () => {
   const router = useRouter();
   const { login } = useAuth();
+  const { applyTheme } = useTheme();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -41,8 +43,30 @@ const LoginPage = () => {
         return showToast("Invalid email or password!", "error");
       }
 
+            // Time-based theme: 5 AM - 12 PM IST = light, or dark
+      const istHour = Number(
+        new Date().toLocaleString("en-US", {
+          timeZone: "Asia/Kolkata",
+          hour: "2-digit",
+          hour12: false,
+        })
+      );
+      const autoTheme = istHour >= 5 && istHour < 12 ? "light" : "dark";
+      const finalTheme =
+        user.themeAuto === false && user.theme ? user.theme : autoTheme;
+      applyTheme(finalTheme, false);
+
+      // auto theme ko profile mein save karo
+      if (user.themeAuto !== false) {
+        fetch(`http://localhost:5000/api/users/${user._id}/theme`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ theme: finalTheme, themeAuto: true }),
+        }).catch(() => {});
+      }
+
       // Update global auth state so the navbar refreshes instantly
-       login(user);
+      login(user);
       
       showToast("✅ Welcome back, " + user.name + "!");
       

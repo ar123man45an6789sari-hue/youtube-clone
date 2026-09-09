@@ -1,6 +1,6 @@
 import Comment from "../models/Comment.js";
 
-// own comment edit karne ka time window (minutes)
+// own comment edit  time window (minutes)
 const EDIT_LIMIT_MIN = 10;
 
 // simple bad-words list for the profanity filter
@@ -9,7 +9,6 @@ const BAD_WORDS = [
   "madarchod", "bhosdike", "chutiya", "randi", "harami", "saala","RASCAL", "CHUTMARIKE","bhosda","chodu","gandu","lodu","lund","loda","lund kaat","lund kaatna","lund kaat ke khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke khanna", "gand",
 ];
 
-// helper: purane comments mein likes/dislikes arrays na hon toh bana do
 const safeArrays = (comment) => {
   if (!Array.isArray(comment.likes)) comment.likes = [];
   if (!Array.isArray(comment.dislikes)) comment.dislikes = [];
@@ -24,8 +23,17 @@ export const getComments = async (req, res) => {
 
     if (sort === "oldest") {
       comments.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-    } else if (sort === "mostLiked") {
+       } else if (sort === "mostLiked") {
       comments.sort((a, b) => (b.likes || []).length - (a.likes || []).length);
+    } else if (sort === "mostRelevant") {
+      // relevance score = likes * 2 + number of replies
+      const replyCount = (id) =>
+        comments.filter((x) => String(x.parentId) === String(id)).length;
+      comments.sort((a, b) => {
+        const scoreA = (a.likes || []).length * 2 + replyCount(a._id);
+        const scoreB = (b.likes || []).length * 2 + replyCount(b._id);
+        return scoreB - scoreA;
+      });
     } else {
       comments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     }
@@ -78,6 +86,22 @@ export const createComment = async (req, res) => {
       return res.status(429).json({
         success: false,
         message: "Too many comments! Please wait a minute before posting again.",
+      });
+    }
+      // 4. emoji / special character flood check
+    const letters = (text.match(/[\p{L}\p{N}]/gu) || []).length;
+    if (text.trim().length >= 6 && letters / text.trim().length < 0.4) {
+      return res.status(400).json({
+        success: false,
+        message: "Comment blocked: too many symbols or emojis.",
+      });
+    }
+
+    // 5. malicious links block
+    if (/(https?:\/\/|www\.)/i.test(text)) {
+      return res.status(400).json({
+        success: false,
+        message: "Links are not allowed in comments.",
       });
     }
 
@@ -185,6 +209,16 @@ export const reportComment = async (req, res) => {
     const comment = await Comment.findById(req.params.id);
     if (!comment) {
       return res.status(404).json({ success: false, message: "Comment not found" });
+    }
+        // same user can't report the same comment multiple times
+    const already = comment.reports.some(
+      (r) => r.reportedBy === (userId || "guest")
+    );
+    if (already) {
+      return res.status(400).json({
+        success: false,
+        message: "You already reported this comment.",
+      });
     }
 
     comment.reports.push({

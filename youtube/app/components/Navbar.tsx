@@ -2,10 +2,11 @@
 
 import { useState} from "react";
 import { useRouter } from "next/navigation";
-import { Menu, Search, Mic, Video, Bell } from "lucide-react";
+import { Menu, Search, Mic, Video, Bell,Sun,Moon} from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import Link from "next/link";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 
 type NavbarProps = {
   onMenuClick: () => void;
@@ -15,6 +16,20 @@ const Navbar = ({ onMenuClick }: NavbarProps) => {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const { user, logout, loading } = useAuth();
+    const { theme, applyTheme } = useTheme();
+
+  // manual theme switch
+  const handleThemeToggle = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    applyTheme(next, true);
+    if (user?._id) {
+      fetch(`http://localhost:5000/api/users/${user._id}/theme`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ theme: next, themeAuto: false }),
+      }).catch(() => {});
+    }
+  };
   const [bellOpen, setBellOpen] = useState(false);
 
   const handleLogout = () => {
@@ -56,6 +71,9 @@ const Navbar = ({ onMenuClick }: NavbarProps) => {
 
       {/* Right: Upload + Notifications + Auth Buttons */}
       <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" onClick={handleThemeToggle} title="Toggle theme">
+          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+        </Button>
         <Link
           href="/upload"
           className="flex items-center gap-1 rounded-full bg-black px-4 py-1.5 text-sm font-medium text-white hover:bg-gray-800"

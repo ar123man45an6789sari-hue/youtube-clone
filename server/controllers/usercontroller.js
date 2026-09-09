@@ -20,4 +20,25 @@ const createUser = async (req, res) => {
   }
 };
 
-export { getUsers, createUser };
+// save the user's theme preference (auto or manual)
+const updateUserTheme = async (req, res) => {
+  try {
+    const { theme, themeAuto } = req.body;
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { theme, themeAuto },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.status(200).json({ success: true, data: user });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export { getUsers, createUser, updateUserTheme };

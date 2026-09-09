@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { CheckCircle, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 
 const SignupPage = () => {
   const router = useRouter();
   const { login } = useAuth();
+    const { applyTheme } = useTheme();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -61,8 +63,26 @@ const SignupPage = () => {
 
       const data = await res.json();
       
+            // for new account , time-based theme (5 AM - 12 PM IST = light)
+      const istHour = Number(
+        new Date().toLocaleString("en-US", {
+          timeZone: "Asia/Kolkata",
+          hour: "2-digit",
+          hour12: false,
+        })
+      );
+      const autoTheme = istHour >= 5 && istHour < 12 ? "light" : "dark";
+      applyTheme(autoTheme, false);
+
+      // save auto theme in the new profile
+      fetch(`http://localhost:5000/api/users/${data.data._id}/theme`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ theme: autoTheme, themeAuto: true }),
+      }).catch(() => {});
+
       // Update global auth state so the navbar refreshes instantly
-       login(data.data);
+      login(data.data);
       
       showToast("✅ Account created successfully! Welcome, " + formData.name + "!");
       
