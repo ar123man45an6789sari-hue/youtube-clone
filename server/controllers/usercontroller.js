@@ -1,6 +1,5 @@
 import User from "../models/User.js";
 
-// Saare users ko database se lana
 const getUsers = async (req, res) => {
   try {
     const users = await User.find({});
@@ -10,7 +9,6 @@ const getUsers = async (req, res) => {
   }
 };
 
-// Naya user database mein save karna
 const createUser = async (req, res) => {
   try {
     const newUser = await User.create(req.body);
