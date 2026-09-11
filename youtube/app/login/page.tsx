@@ -32,16 +32,22 @@ const LoginPage = () => {
 
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/users");
+            // real login endpoint: backend verify karta hai aur login record banata hai
+      const res = await fetch("http://localhost:5000/api/users/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+        }),
+      });
       const data = await res.json();
-      
-      const user = data.data.find(
-        (u: any) => u.email === formData.email && u.password === formData.password
-      );
 
-      if (!user) {
-        return showToast("Invalid email or password!", "error");
+      if (!res.ok || !data.success) {
+        return showToast(data.message || "Invalid email or password!", "error");
       }
+
+      const user = data.data;
 
             // Time-based theme: 5 AM - 12 PM IST = light, or dark
       const istHour = Number(
