@@ -6,7 +6,7 @@ const EDIT_LIMIT_MIN = 10;
 // simple bad-words list for the profanity filter
 const BAD_WORDS = [
   "fuck", "shit", "bitch", "bastard", "asshole",
-  "madarchod", "bhosdike", "chutiya", "randi", "harami", "saala","RASCAL", "CHUTMARIKE","bhosda","chodu","gandu","lodu","lund","loda","lund kaat","lund kaatna","lund kaat ke khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke khanna", "gand",
+  "madharchod", "bhosdike", "chutiya", "randi", "harami", "saala","RASCAL", "CHUTMARIKE","bhosda","chodu","gandu","lodu","lund","loda","lund kaat","lund kaatna","lund kaat ke khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke khanna", "gand",
 ];
 
 const safeArrays = (comment) => {
@@ -119,11 +119,11 @@ export const createComment = async (req, res) => {
   }
 };
 
-// like / dislike toggle (ek user = ek reaction)
+// like / dislike toggle 
 export const reactComment = async (req, res) => {
   try {
     const { userId } = req.body;
-    const type = req.params.type; // "like" ya "dislike"
+    const type = req.params.type; // "like" or "dislike"
 
     if (!userId) {
       return res.status(401).json({ success: false, message: "Please sign in first" });
@@ -139,7 +139,7 @@ export const reactComment = async (req, res) => {
 
     const index = my.indexOf(userId);
     if (index > -1) {
-      my.splice(index, 1); // dobara click = reaction hat jao
+      my.splice(index, 1); 
     } else {
       my.push(userId);
       const otherIndex = other.indexOf(userId);
@@ -153,7 +153,7 @@ export const reactComment = async (req, res) => {
   }
 };
 
-// edit own comment (sirf EDIT_LIMIT_MIN minutes ke andar)
+// edit own comment 
 export const updateComment = async (req, res) => {
   try {
     const { userId, text } = req.body;
@@ -180,7 +180,7 @@ export const updateComment = async (req, res) => {
   }
 };
 
-// delete own comment (saath mein uske replies bhi)
+// delete own comment
 export const deleteComment = async (req, res) => {
   try {
     const { userId } = req.body;

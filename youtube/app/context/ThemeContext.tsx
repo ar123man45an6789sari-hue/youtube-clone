@@ -20,7 +20,7 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     document.documentElement.classList.toggle("dark", saved === "dark");
   }, []);
 
-  // manual = user ne switch dabaya (auto mode band ho jata hai)
+  
   const applyTheme = (next: string, manual: boolean) => {
     setTheme(next);
     localStorage.setItem("theme", next);

@@ -82,7 +82,6 @@
   }
 }
 /* ---------- dark mode setup (Task 5) ---------- */
-/* html.dark class ThemeContext toggle karta hai */
 @custom-variant dark (&:where(.dark, .dark *));
 
 .dark body {

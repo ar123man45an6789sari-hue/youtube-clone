@@ -85,7 +85,7 @@ const Navbar = ({ onMenuClick }: NavbarProps) => {
           <Bell />
         </Button>
 
-        {/* AUTH BUTTONS - Agar user logged in nahi hai */}
+        {/* AUTH BUTTONS*/}
        {loading ? null : !user ? (
           <>
             <Link
@@ -102,11 +102,16 @@ const Navbar = ({ onMenuClick }: NavbarProps) => {
             </Link>
           </>
         ) : (
-          /* USER PROFILE - Agar user logged in hai */
-          <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
             <span className="text-sm text-gray-700">
               Hi, {user.name || user.email?.split("@")[0]}
             </span>
+            <Link
+              href="/security"
+              className="rounded-full border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-100"
+            >
+              Security
+            </Link>
             <button
               onClick={handleLogout}
               className="rounded-full border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-100"

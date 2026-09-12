@@ -14,7 +14,7 @@ const router = express.Router();
 // moderation list (must be before /:videoId route)
 router.route("/reported").get(getReportedComments);
 
-// PUT /api/comments/react/like/:id (ya dislike)
+// PUT /api/comments/react/like/:id 
 router.route("/react/:type/:id").put(reactComment);
 
 // PUT /api/comments/report/:id

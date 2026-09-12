@@ -23,10 +23,12 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "dark", // "light" or "dark"
     },
-    themeAuto: {
+        themeAuto: {
       type: Boolean,
       default: true,
     },
+    otpCode: { type: String, default: "" },
+    otpExpires: { type: Date, default: null },
   },
   { timestamps: true } 
 );

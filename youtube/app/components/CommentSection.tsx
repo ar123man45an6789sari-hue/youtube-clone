@@ -20,7 +20,7 @@ type CommentSectionProps = {
   videoId: string;
 };
 
-// edit window in minutes (same rule as backend)
+//(same rule as backend)
 const EDIT_LIMIT_MIN = 10;
 
 export default function CommentSection({ videoId }: CommentSectionProps) {
@@ -47,7 +47,7 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
   const [showTrans, setShowTrans] = useState<Record<string, boolean>>({});
   const [prefLang, setPrefLang] = useState("en");
 
-  // anti-spam captcha state (4th post se aage)
+  // anti-spam captcha state
   const [postCount, setPostCount] = useState(0);
   const [captchaQ, setCaptchaQ] = useState<string | null>(null);
   const [captchaA, setCaptchaA] = useState(0);
@@ -473,7 +473,7 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
         <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{message}</p>
       )}
 
-      {/* real YouTube jaisa: comment karne ke liye login chahiye */}
+     
       {user ? (
         <form onSubmit={handleSubmit} className="mb-8 flex gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-purple-600 text-sm font-medium text-white">
@@ -489,7 +489,7 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
               disabled={isLoading}
             />
 
-            {/* captcha box (4th post se aage dikhta hai) */}
+          
             {captchaQ && (
               <div className="mt-2 flex items-center gap-2 rounded-lg bg-yellow-50 px-3 py-2 text-sm">
                 <span className="font-medium">🤖 {captchaQ}</span>

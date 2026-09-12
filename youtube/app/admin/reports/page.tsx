@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-// simple moderation list: users ne jin comments ko report kiya
 export default function AdminReportsPage() {
   const [reports, setReports] = useState<any[]>([]);
 

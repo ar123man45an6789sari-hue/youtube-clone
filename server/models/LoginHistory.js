@@ -14,9 +14,14 @@ const loginHistorySchema = new mongoose.Schema(
     city: { type: String, default: "Unknown" },
     state: { type: String, default: "Unknown" },
     country: { type: String, default: "Unknown" },
-    trusted: { type: Boolean, default: false }, // Day 10: OTP verify ke baad true hogi
+       trusted: { type: Boolean, default: false }, // OTP verify / trusted device login
+    deviceToken: { type: String, default: "" }, // browser identity
+    status: {
+      type: String,
+      default: "success", // success | otp_sent | otp_failed
+    },
   },
-  { timestamps: true } // createdAt = login ka time
+  { timestamps: true } // createdAt = login's time
 );
 
 const LoginHistory = mongoose.model("LoginHistory", loginHistorySchema);
