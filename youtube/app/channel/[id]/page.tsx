@@ -1,3 +1,4 @@
+import { API } from "../../lib/api";
 import VideoCard from "../../components/VideoCard";
 
 type Props = {
@@ -10,7 +11,7 @@ const ChannelPage = async ({ params }: Props) => {
   let videos: any[] = [];
 
   try {
-    const res = await fetch(`http://localhost:5000/api/videos/channel/${id}`, {
+    const res = await fetch(`${API}/api/videos/channel/${id}`, {
       cache: "no-store",
     });
     const data = await res.json();
@@ -50,7 +51,6 @@ const ChannelPage = async ({ params }: Props) => {
               channel={video.channel?.name || "Unknown Channel"}
               views={`${video.views || 0} views`}
               time={new Date(video.createdAt).toLocaleDateString()}
-              seed={Math.floor(Math.random() * 1000)}
             />
           ))}
         </div>

@@ -1,10 +1,11 @@
+import { API } from "./lib/api";
 import VideoCard from "./components/VideoCard";
 
 const Home = async () => {
   let videos = [];
 
   try {
-    const res = await fetch("http://localhost:5000/api/videos", {
+    const res = await fetch(`${API}/api/videos`, {
       cache: "no-store", // Fetch fresh data on every request
     });
     const data = await res.json();
@@ -44,7 +45,6 @@ const Home = async () => {
               channel={video.channel?.name || "Unknown Channel"}
               views={`${video.views || 0} views`}
               time={new Date(video.createdAt).toLocaleDateString()}
-              seed={Math.floor(Math.random() * 1000)}
             />
           ))}
         </div>

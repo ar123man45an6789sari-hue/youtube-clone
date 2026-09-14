@@ -1,4 +1,5 @@
 "use client";
+import { API } from "../lib/api";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -27,7 +28,7 @@ const ForgotPasswordPage = () => {
     setLoading(true);
     try {
       // Check if user exists
-      const res = await fetch("http://localhost:5000/api/users");
+      const res = await fetch(`${API}/api/users`);
       const data = await res.json();
       
       const user = data.data.find((u: any) => u.email === email);

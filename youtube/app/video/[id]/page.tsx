@@ -1,3 +1,4 @@
+import { API } from "../../lib/api";
 import { notFound } from "next/navigation";
 import VideoPageClient from "../../components/VideoPageClient";
 
@@ -11,7 +12,7 @@ const VideoPage = async ({ params }: Props) => {
   // fetch the current video from backend
   let video;
   try {
-    const res = await fetch(`http://localhost:5000/api/videos/${id}`, {
+    const res = await fetch(`${API}/api/videos/${id}`, {
       cache: "no-store",
     });
     const data = await res.json();
@@ -27,7 +28,7 @@ const VideoPage = async ({ params }: Props) => {
   // fetch related videos (all videos except the current one)
   let allVideos = [];
   try {
-    const res = await fetch("http://localhost:5000/api/videos", {
+    const res = await fetch(`${API}/api/videos`, {
       cache: "no-store",
     });
     const data = await res.json();

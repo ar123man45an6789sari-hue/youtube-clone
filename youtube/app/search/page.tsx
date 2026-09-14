@@ -1,3 +1,4 @@
+import { API } from "../lib/api";
 import VideoCard from "../components/VideoCard";
 
 type Props = {
@@ -12,7 +13,7 @@ const SearchPage = async ({ searchParams }: Props) => {
   if (q) {
     try {
       const res = await fetch(
-        `http://localhost:5000/api/videos/search?q=${encodeURIComponent(q)}`,
+        `${API}/api/videos/search?q=${encodeURIComponent(q)}`,
         { cache: "no-store" }
       );
       const data = await res.json();
@@ -43,7 +44,6 @@ const SearchPage = async ({ searchParams }: Props) => {
               channel={video.channel?.name || "Unknown Channel"}
               views={`${video.views || 0} views`}
               time={new Date(video.createdAt).toLocaleDateString()}
-              seed={Math.floor(Math.random() * 1000)}
             />
           ))}
         </div>

@@ -1,4 +1,5 @@
 "use client";
+import { API } from "../lib/api";
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -66,7 +67,7 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
     const fetchComments = async () => {
       try {
         const res = await fetch(
-          `http://localhost:5000/api/comments/${videoId}?sort=${sort}`
+          `${API}/api/comments/${videoId}?sort=${sort}`
         );
         const data = await res.json();
         if (data.success) {
@@ -111,7 +112,7 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
 
     setIsLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/comments/${videoId}`, {
+      const res = await fetch(`${API}/api/comments/${videoId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -144,7 +145,7 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
     if (!replyText.trim() || !user) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/comments/${videoId}`, {
+      const res = await fetch(`${API}/api/comments/${videoId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -175,7 +176,7 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
 
     try {
       const res = await fetch(
-        `http://localhost:5000/api/comments/react/${type}/${commentId}`,
+        `${API}/api/comments/react/${type}/${commentId}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -199,7 +200,7 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
     if (!editText.trim()) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/comments/${commentId}`, {
+      const res = await fetch(`${API}/api/comments/${commentId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user?._id, text: editText }),
@@ -220,7 +221,7 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
   // delete own comment
   const removeComment = async (commentId: string) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/comments/${commentId}`, {
+      const res = await fetch(`${API}/api/comments/${commentId}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user?._id }),
@@ -242,7 +243,7 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
     if (!reason) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/comments/report/${commentId}`, {
+      const res = await fetch(`${API}/api/comments/report/${commentId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user?._id || "guest", reason }),

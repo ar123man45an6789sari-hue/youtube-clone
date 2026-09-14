@@ -1,4 +1,5 @@
 "use client";
+import { API } from "../lib/api";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -14,8 +15,8 @@ const SecurityPage = () => {
     if (!user?._id) return;
     try {
       const [h, d] = await Promise.all([
-        fetch(`http://localhost:5000/api/users/login-history/${user._id}`).then((r) => r.json()),
-        fetch(`http://localhost:5000/api/users/trusted-devices/${user._id}`).then((r) => r.json()),
+        fetch(`${API}/api/users/login-history/${user._id}`).then((r) => r.json()),
+        fetch(`${API}/api/users/trusted-devices/${user._id}`).then((r) => r.json()),
       ]);
       if (h.success) setHistory(h.data);
       if (d.success) setDevices(d.data);
@@ -30,7 +31,7 @@ const SecurityPage = () => {
 
   const removeDevice = async (id: string) => {
     try {
-      await fetch(`http://localhost:5000/api/users/trusted-devices/${id}`, {
+      await fetch(`${API}/api/users/trusted-devices/${id}`, {
         method: "DELETE",
       });
       load();

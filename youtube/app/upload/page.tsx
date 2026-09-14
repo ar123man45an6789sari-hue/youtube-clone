@@ -1,4 +1,5 @@
 "use client";
+import { API } from "../lib/api";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -97,7 +98,7 @@ const UploadPage = () => {
 
     const checkChannel = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/channels");
+        const res = await fetch(`${API}/api/channels`);
         const data = await res.json();
         const myChannel = data.data.find((c: any) => c.user?._id === user._id);
         if (myChannel) setChannel(myChannel);
@@ -118,7 +119,7 @@ const UploadPage = () => {
 
     setBusy(true);
     try {
-      const res = await fetch("http://localhost:5000/api/channels", {
+      const res = await fetch(`${API}/api/channels`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user: user?._id, name: channelName, handle }),
@@ -174,7 +175,7 @@ const UploadPage = () => {
       }
 
       // 3. Save video details in our database
-      const res = await fetch("http://localhost:5000/api/videos", {
+      const res = await fetch(`${API}/api/videos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

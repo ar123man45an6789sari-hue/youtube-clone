@@ -1,4 +1,5 @@
 "use client";
+import { API } from "../lib/api";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -48,7 +49,7 @@ const LoginPage = () => {
     applyTheme(finalTheme, false);
 
     if (user.themeAuto !== false) {
-      fetch(`http://localhost:5000/api/users/${user._id}/theme`, {
+      fetch(`${API}/api/users/${user._id}/theme`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ theme: finalTheme, themeAuto: true }),
@@ -68,7 +69,7 @@ const LoginPage = () => {
 
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/users/login", {
+      const res = await fetch(`${API}/api/users/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -111,7 +112,7 @@ const LoginPage = () => {
 
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/users/verify-otp", {
+      const res = await fetch(`${API}/api/users/verify-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

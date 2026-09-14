@@ -1,4 +1,5 @@
 "use client";
+import { API } from "../lib/api";
 
 import { useEffect, useState } from "react";
 import VideoCard from "./VideoCard";
@@ -19,7 +20,7 @@ const SavedVideosPage = ({ storageKey, title, emptyMessage }: SavedVideosPagePro
       const ids = getStoredIds(storageKey);
       const list = await Promise.all(
         ids.map((id) =>
-          fetch(`http://localhost:5000/api/videos/${id}`)
+          fetch(`${API}/api/videos/${id}`)
             .then((r) => r.json())
             .then((d) => d.data)
             .catch(() => null)
@@ -49,7 +50,6 @@ const SavedVideosPage = ({ storageKey, title, emptyMessage }: SavedVideosPagePro
               channel={video.channel?.name || "Unknown Channel"}
               views={`${video.views || 0} views`}
               time={new Date(video.createdAt).toLocaleDateString()}
-              seed={Math.floor(Math.random() * 1000)}
             />
           ))}
         </div>

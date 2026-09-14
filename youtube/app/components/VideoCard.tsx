@@ -6,17 +6,26 @@ type VideoCardProps = {
   channel: string;
   views: string;
   time: string;
-  seed: number;
   thumbnail?: string; // real thumbnail from database (optional)
 };
 
-const VideoCard = ({ id, title, channel, views, time, seed, thumbnail }: VideoCardProps) => {
+// stable placeholder seed derived from the video id
+// (Math.random renders differently on server and client -> hydration error)
+const seedFromId = (id: string) => {
+  let n = 0;
+  for (let i = 0; i < id.length; i++) {
+    n = (n * 31 + id.charCodeAt(i)) % 1000000;
+  }
+  return n;
+};
+
+const VideoCard = ({ id, title, channel, views, time, thumbnail }: VideoCardProps) => {
   return (
     <Link href={`/video/${id}`} className="block cursor-pointer space-y-2">
       <div className="aspect-video w-full overflow-hidden rounded-xl bg-gray-200">
-        {/* Show the real thumbnail if available, otherwise a placeholder */}
+        {/* Show the real thumbnail if available, otherwise a stable placeholder */}
         <img
-          src={thumbnail || `https://picsum.photos/seed/${seed}/640/360`}
+          src={thumbnail || `https://picsum.photos/seed/${seedFromId(String(id))}/640/360`}
           alt={title}
           className="h-full w-full object-cover transition-transform hover:scale-105"
         />

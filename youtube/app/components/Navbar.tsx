@@ -1,4 +1,5 @@
 "use client";
+import { API } from "../lib/api";
 
 import { useState} from "react";
 import { useRouter } from "next/navigation";
@@ -23,7 +24,7 @@ const Navbar = ({ onMenuClick }: NavbarProps) => {
     const next = theme === "dark" ? "light" : "dark";
     applyTheme(next, true);
     if (user?._id) {
-      fetch(`http://localhost:5000/api/users/${user._id}/theme`, {
+      fetch(`${API}/api/users/${user._id}/theme`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ theme: next, themeAuto: false }),

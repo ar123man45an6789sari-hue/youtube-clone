@@ -106,7 +106,6 @@ const VideoPageClient = ({
               channel={v.channel?.name || "Unknown"}
               views={`${v.views || 0} views`}
               time={new Date(v.createdAt).toLocaleDateString()}
-              seed={Math.floor(Math.random() * 1000)}
             />
           ))}
         </div>

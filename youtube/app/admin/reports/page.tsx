@@ -1,4 +1,5 @@
 "use client";
+import { API } from "../../lib/api";
 
 import { useEffect, useState } from "react";
 export default function AdminReportsPage() {
@@ -7,7 +8,7 @@ export default function AdminReportsPage() {
   useEffect(() => {
     const fetchReported = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/comments/reported");
+        const res = await fetch(`${API}/api/comments/reported`);
         const data = await res.json();
         if (data.success) setReports(data.data);
       } catch (error) {

@@ -1,4 +1,5 @@
 "use client";
+import { API } from "../lib/api";
 
 import { useEffect, useState } from "react";
 import { Bookmark, BookmarkCheck, ThumbsUp, ThumbsDown } from "lucide-react";
@@ -47,7 +48,7 @@ const VideoActions = ({
   useEffect(() => {
     const trackVisit = async () => {
       try {
-        await fetch(`http://localhost:5000/api/videos/${videoId}/views`, {
+        await fetch(`${API}/api/videos/${videoId}/views`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
         });
@@ -65,7 +66,7 @@ const VideoActions = ({
 
   const handleLike = async () => {
     try {
-      const res = await fetch(`http://localhost:5000/api/videos/${videoId}/like`, {
+      const res = await fetch(`${API}/api/videos/${videoId}/like`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: "local-user" }),
@@ -90,7 +91,7 @@ const VideoActions = ({
 
   const handleDislike = async () => {
     try {
-      const res = await fetch(`http://localhost:5000/api/videos/${videoId}/dislike`, {
+      const res = await fetch(`${API}/api/videos/${videoId}/dislike`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: "local-user" }),

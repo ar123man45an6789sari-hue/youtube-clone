@@ -1,4 +1,5 @@
 "use client";
+import { API } from "../lib/api";
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -57,7 +58,7 @@ const ResetPasswordPage = () => {
     setLoading(true);
     try {
       // Find user and update password
-      const res = await fetch("http://localhost:5000/api/users");
+      const res = await fetch(`${API}/api/users`);
       const data = await res.json();
       
       const user = data.data.find((u: any) => u.email === email);
@@ -67,7 +68,7 @@ const ResetPasswordPage = () => {
       }
 
      // Update password in backend
-const updateRes = await fetch(`http://localhost:5000/api/users/${user._id}`, {
+const updateRes = await fetch(`${API}/api/users/${user._id}`, {
   method: "PUT",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ password: formData.newPassword }),

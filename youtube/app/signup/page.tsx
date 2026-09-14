@@ -1,4 +1,5 @@
 "use client";
+import { API } from "../lib/api";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -42,7 +43,7 @@ const SignupPage = () => {
     setLoading(true);
     try {
       // Check if user already exists
-      const usersRes = await fetch("http://localhost:5000/api/users");
+      const usersRes = await fetch(`${API}/api/users`);
       const usersData = await usersRes.json();
       const existingUser = usersData.data.find((u: any) => u.email === formData.email);
 
@@ -51,7 +52,7 @@ const SignupPage = () => {
       }
 
       // Create new user
-      const res = await fetch("http://localhost:5000/api/users", {
+      const res = await fetch(`${API}/api/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -75,7 +76,7 @@ const SignupPage = () => {
       applyTheme(autoTheme, false);
 
       // save auto theme in the new profile
-      fetch(`http://localhost:5000/api/users/${data.data._id}/theme`, {
+      fetch(`${API}/api/users/${data.data._id}/theme`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ theme: autoTheme, themeAuto: true }),

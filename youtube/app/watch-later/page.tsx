@@ -1,4 +1,5 @@
 "use client";
+import { API } from "../lib/api";
 
 import { useEffect, useState } from "react";
 import VideoCard from "../components/VideoCard";
@@ -19,7 +20,7 @@ const WatchLaterPage = () => {
 
       const list = await Promise.all(
         ids.map((id) =>
-          fetch(`http://localhost:5000/api/videos/${id}`)
+          fetch(`${API}/api/videos/${id}`)
             .then((res) => res.json())
             .then((data) => data.data)
             .catch(() => null)
@@ -54,7 +55,6 @@ const WatchLaterPage = () => {
               channel={video.channel?.name || "Unknown Channel"}
               views={`${video.views || 0} views`}
               time={new Date(video.createdAt).toLocaleDateString()}
-              seed={Math.floor(Math.random() * 1000)}
             />
           ))}
         </div>
