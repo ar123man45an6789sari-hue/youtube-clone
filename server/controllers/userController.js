@@ -49,14 +49,29 @@ const sendOtpEmail = async (to, code) => {
       service: "gmail",
       auth: { user: mailUser, pass: mailPass },
     });
-    await transporter.sendMail({
-      from: mailUser,
-      to,
-      subject: "Your YouTube Clone login OTP",
-      text: `Your one-time login code is ${code}. It expires in 10 minutes. If you did not try to login, please ignore this email.`,
-    });
-    return true;
+        try {
+      await transporter.sendMail({
+        from: mailUser,
+        to,
+        subject: "Your YouTube Clone login OTP",
+        text: `Your one-time login code is ${code}. It expires in 10 minutes. If you did not try to login, please ignore this email.`,
+      });
+      return true;
+    } catch (firstError) {
+      // retry once, network hiccups happen
+      console.log("Email retry after:", firstError.message);
+      await transporter.sendMail({
+        from: mailUser,
+        to,
+        subject: "Your YouTube Clone login OTP",
+        text: `Your one-time login code is ${code}. It expires in 10 minutes. If you did not try to login, please ignore this email.`,
+      });
+      return true;
+    }
   } catch (error) {
+    console.log("Email send failed:", error.message);
+    return false;
+  } {
     console.log("Email send failed:", error.message);
     return false;
   }
@@ -66,10 +81,16 @@ const getDeviceInfo = async (req) => {
   let city = "Unknown";
   let state = "Unknown";
   let country = "Unknown";
-  try {
-    const geoRes = await fetch("http://ip-api.com/json/");
-    const geo = await geoRes.json();
-    if (geo.status === "success") {
+      try {
+      // 3 second timeout so login never waits on the geo service
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3000);
+      const geoRes = await fetch("http://ip-api.com/json/", {
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      const geo = await geoRes.json();
+      if (geo.status === "success") { 
       ip = geo.query;
       city = geo.city;
       state = geo.regionName;

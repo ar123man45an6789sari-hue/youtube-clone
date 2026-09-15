@@ -19,7 +19,10 @@ const LoginPage = () => {
   const [deviceToken, setDeviceToken] = useState("");
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
+  const [demoCode, setDemoCode] = useState("");
 
+  // unique identity per browser (for trusted devices)
   useEffect(() => {
     let token = localStorage.getItem("deviceToken");
     if (!token) {
@@ -29,12 +32,19 @@ const LoginPage = () => {
     setDeviceToken(token);
   }, []);
 
+  // resend OTP countdown timer
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn(resendIn - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
+
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
   };
 
-  
+  // common work after login: theme, auth state and redirect
   const finishLogin = (user: any) => {
     const istHour = Number(
       new Date().toLocaleString("en-US", {
@@ -84,12 +94,14 @@ const LoginPage = () => {
         return showToast(data.message || "Invalid email or password!", "error");
       }
 
-      // naya device -> OTP step kholo
+      // new device -> open the OTP step
       if (data.otpRequired) {
         setStep("otp");
+        setDemoCode(data.demoOtp || "");
+        setResendIn(30);
         showToast(
           data.demoOtp
-            ? `Demo mode: your code is ${data.demoOtp}`
+            ? `Email failed - demo code: ${data.demoOtp}`
             : "OTP sent to your registered email!",
           "success"
         );
@@ -130,6 +142,40 @@ const LoginPage = () => {
       finishLogin(data.data);
     } catch (error: any) {
       showToast("Verification failed: " + error.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // resend OTP (same login call again, generates a fresh code)
+  const handleResend = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/users/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          deviceToken,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.success && data.otpRequired) {
+        setDemoCode(data.demoOtp || "");
+        setResendIn(30);
+        showToast(
+          data.demoOtp
+            ? `Email failed - demo code: ${data.demoOtp}`
+            : "New code sent to your email!",
+          "success"
+        );
+      } else {
+        showToast(data.message || "Resend failed!", "error");
+      }
+    } catch (error: any) {
+      showToast("Resend failed: " + error.message, "error");
     } finally {
       setLoading(false);
     }
@@ -207,8 +253,8 @@ const LoginPage = () => {
             </div>
             <h1 className="mb-2 text-center text-2xl font-semibold">Verify It's You</h1>
             <p className="mb-6 text-center text-sm text-gray-600">
-              New device detect hua hai. 6-digit code daalo jo humne bheja hai
-              (<strong>{formData.email}</strong>)
+              We detected a new device. Enter the 6-digit code sent to{" "}
+              <strong>{formData.email}</strong>
             </p>
 
             <form onSubmit={handleOtp} className="space-y-4">
@@ -229,8 +275,23 @@ const LoginPage = () => {
               </button>
             </form>
 
+            {/* shown only when the email could not be delivered */}
+            {demoCode && (
+              <p className="mt-3 rounded-lg bg-yellow-50 px-3 py-2 text-center text-xs text-yellow-700">
+                Email not delivered - demo code: <strong>{demoCode}</strong>
+              </p>
+            )}
+
             <p className="mt-4 text-center text-xs text-gray-500">
-              Code 10 minute mein expire ho jayega. Galat device tha?{" "}
+              Didn't get the code?{" "}
+              {resendIn > 0 ? (
+                <span>Resend in {resendIn}s</span>
+              ) : (
+                <button onClick={handleResend} className="font-medium text-blue-600">
+                  Resend Code
+                </button>
+              )}{" "}
+              • Wrong device?{" "}
               <button onClick={() => setStep("login")} className="text-red-600 font-medium">
                 Go back
               </button>
