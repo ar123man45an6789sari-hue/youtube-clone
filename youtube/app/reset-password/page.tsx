@@ -1,12 +1,11 @@
 "use client";
 import { API } from "../lib/api";
-
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle, AlertCircle, Key } from "lucide-react";
 import Link from "next/link";
 
-const ResetPasswordPage = () => {
+const ResetPasswordContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
@@ -200,4 +199,17 @@ if (!updateRes.ok || !updateData.success) {
   );
 };
 
-export default ResetPasswordPage;
+// useSearchParams needs a Suspense boundary during the static build
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center text-sm text-gray-500">
+          Loading...
+        </div>
+      }
+    >
+      <ResetPasswordContent />
+    </Suspense>
+  );
+}
