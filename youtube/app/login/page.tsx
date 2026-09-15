@@ -101,7 +101,7 @@ const LoginPage = () => {
         setResendIn(30);
         showToast(
           data.demoOtp
-            ? `Email failed - demo code: ${data.demoOtp}`
+            ? `Email slow/failed - use demo code: ${data.demoOtp}`
             : "OTP sent to your registered email!",
           "success"
         );
@@ -167,7 +167,7 @@ const LoginPage = () => {
         setResendIn(30);
         showToast(
           data.demoOtp
-            ? `Email failed - demo code: ${data.demoOtp}`
+            ? `Email slow/failed - use demo code: ${data.demoOtp}`
             : "New code sent to your email!",
           "success"
         );
@@ -275,10 +275,10 @@ const LoginPage = () => {
               </button>
             </form>
 
-            {/* shown only when the email could not be delivered */}
+            {/* shown only when the email is slow or could not be delivered */}
             {demoCode && (
               <p className="mt-3 rounded-lg bg-yellow-50 px-3 py-2 text-center text-xs text-yellow-700">
-                Email not delivered - demo code: <strong>{demoCode}</strong>
+                Email not delivered yet - you can use this code: <strong>{demoCode}</strong>
               </p>
             )}
 

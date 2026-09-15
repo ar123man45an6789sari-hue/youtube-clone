@@ -1,6 +1,8 @@
 import User from "../models/User.js";
 import LoginHistory from "../models/LoginHistory.js";
 import TrustedDevice from "../models/TrustedDevice.js";
+
+// fetch all users from the database
 const getUsers = async (req, res) => {
   try {
     const users = await User.find({});
@@ -9,6 +11,8 @@ const getUsers = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// save a new user in the database
 const createUser = async (req, res) => {
   try {
     const newUser = await User.create(req.body);
@@ -17,6 +21,8 @@ const createUser = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// save the user's theme preference (auto or manual)
 const updateUserTheme = async (req, res) => {
   try {
     const { theme, themeAuto } = req.body;
@@ -36,61 +42,65 @@ const updateUserTheme = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// send the OTP email (Nodemailer), falls back to demo mode if not configured
 const sendOtpEmail = async (to, code) => {
   const mailUser = process.env.MAIL_USER;
   const mailPass = process.env.MAIL_PASS;
-     if (!mailUser || !mailPass) {
+  if (!mailUser || !mailPass) {
     console.log("MAIL_USER/MAIL_PASS not set - using demo mode");
     return false;
   }
+
+  const mailBody = {
+    from: mailUser,
+    to,
+    subject: "Your YouTube Clone login OTP",
+    text: `Your one-time login code is ${code}. It expires in 10 minutes. If you did not try to login, please ignore this email.`,
+  };
+
   try {
     const nodemailer = (await import("nodemailer")).default;
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: { user: mailUser, pass: mailPass },
+      connectionTimeout: 4000, // fail fast instead of hanging
+      greetingTimeout: 4000,
+      socketTimeout: 6000,
     });
-        try {
-      await transporter.sendMail({
-        from: mailUser,
-        to,
-        subject: "Your YouTube Clone login OTP",
-        text: `Your one-time login code is ${code}. It expires in 10 minutes. If you did not try to login, please ignore this email.`,
-      });
+
+    try {
+      await transporter.sendMail(mailBody);
       return true;
     } catch (firstError) {
       // retry once, network hiccups happen
       console.log("Email retry after:", firstError.message);
-      await transporter.sendMail({
-        from: mailUser,
-        to,
-        subject: "Your YouTube Clone login OTP",
-        text: `Your one-time login code is ${code}. It expires in 10 minutes. If you did not try to login, please ignore this email.`,
-      });
+      await transporter.sendMail(mailBody);
       return true;
     }
   } catch (error) {
     console.log("Email send failed:", error.message);
     return false;
-  } {
-    console.log("Email send failed:", error.message);
-    return false;
   }
 };
+
+// collect device and location info from user-agent and geo service
 const getDeviceInfo = async (req) => {
   let ip = "unknown";
   let city = "Unknown";
   let state = "Unknown";
   let country = "Unknown";
-      try {
-      // 3 second timeout so login never waits on the geo service
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 3000);
-      const geoRes = await fetch("http://ip-api.com/json/", {
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
-      const geo = await geoRes.json();
-      if (geo.status === "success") { 
+
+  try {
+    // 3 second timeout so login never waits on the geo service
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    const geoRes = await fetch("http://ip-api.com/json/", {
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    const geo = await geoRes.json();
+    if (geo.status === "success") {
       ip = geo.query;
       city = geo.city;
       state = geo.regionName;
@@ -145,7 +155,7 @@ const loginUser = async (req, res) => {
     const info = await getDeviceInfo(req);
     const token = deviceToken || "";
 
-    // pehle se trusted device? seedha andar
+    // already a trusted device? login directly
     const trusted = await TrustedDevice.findOne({
       userId: user._id,
       deviceToken: token,
@@ -163,13 +173,20 @@ const loginUser = async (req, res) => {
       return res.status(200).json({ success: true, data: user });
     }
 
-
+    // new device -> generate an OTP code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     user.otpCode = code;
-    user.otpExpires = new Date(Date.now() + 10 * 60000);
+    user.otpExpires = new Date(Date.now() + 10 * 60000); // valid for 10 minutes
     await user.save();
 
-    const emailed = await sendOtpEmail(user.email, code);
+    // start the email now but wait at most 5 seconds for it,
+    // so a slow mail server never keeps the user buffering
+    const emailPromise = sendOtpEmail(user.email, code);
+    const emailed = await Promise.race([
+      emailPromise,
+      new Promise((resolve) => setTimeout(() => resolve(false), 5000)),
+    ]);
+    emailPromise.catch(() => {}); // finishes in background, errors logged inside
 
     await LoginHistory.create({
       userId: user._id,
@@ -184,13 +201,15 @@ const loginUser = async (req, res) => {
       otpRequired: true,
       message: emailed
         ? "OTP sent to your registered email!"
-        : "New device detected! (Demo mode)",
+        : "New device detected! Verify with the code shown below.",
       demoOtp: emailed ? undefined : code,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// verify the OTP code, mark the device trusted on success
 const verifyOtp = async (req, res) => {
   try {
     const { email, code, deviceToken } = req.body;
@@ -208,6 +227,7 @@ const verifyOtp = async (req, res) => {
       user.otpExpires > new Date();
 
     if (!valid) {
+      // record the failed OTP attempt
       await LoginHistory.create({
         userId: user._id,
         ip: "unknown",
@@ -226,12 +246,12 @@ const verifyOtp = async (req, res) => {
         .json({ success: false, message: "Invalid or expired code. Please try again." });
     }
 
-
+    // clear the used OTP
     user.otpCode = "";
     user.otpExpires = null;
     await user.save();
 
-    
+    // copy device info from the last otp_sent attempt
     const lastAttempt = await LoginHistory.findOne({
       userId: user._id,
       deviceToken: token,
@@ -258,7 +278,7 @@ const verifyOtp = async (req, res) => {
           country: "Unknown",
         };
 
-   
+    // mark this device trusted for 7 days
     await TrustedDevice.create({
       userId: user._id,
       deviceToken: token,
@@ -282,7 +302,7 @@ const verifyOtp = async (req, res) => {
   }
 };
 
-
+// full login history of one user (for the security page)
 const getLoginHistory = async (req, res) => {
   try {
     const history = await LoginHistory.find({ userId: req.params.userId }).sort({
@@ -306,7 +326,7 @@ const getTrustedDevices = async (req, res) => {
   }
 };
 
-// (session management)
+// remove a trusted device (session management)
 const removeTrustedDevice = async (req, res) => {
   try {
     await TrustedDevice.findByIdAndDelete(req.params.id);
