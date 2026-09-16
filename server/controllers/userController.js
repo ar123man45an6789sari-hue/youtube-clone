@@ -336,6 +336,36 @@ const removeTrustedDevice = async (req, res) => {
   }
 };
 
+// update subscription plan (demo activation today, Razorpay verification from Day 15)
+const updateSubscription = async (req, res) => {
+  try {
+    const { plan, months } = req.body;
+    const allowed = ["Free", "Bronze", "Silver", "Gold"];
+    if (!allowed.includes(plan)) {
+      return res.status(400).json({ success: false, message: "Unknown plan" });
+    }
+
+    const update = { plan };
+    if (plan === "Free") {
+      update.planStart = null;
+      update.planExpiry = null;
+    } else {
+      const now = new Date();
+      update.planStart = now;
+      update.planExpiry = new Date(now.getTime() + (months || 1) * 30 * 24 * 60 * 60 * 1000);
+    }
+
+    const user = await User.findByIdAndUpdate(req.params.id, update, { new: true });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.status(200).json({ success: true, data: user });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export {
   getUsers,
   createUser,
@@ -345,4 +375,5 @@ export {
   getLoginHistory,
   getTrustedDevices,
   removeTrustedDevice,
+  updateSubscription,
 };

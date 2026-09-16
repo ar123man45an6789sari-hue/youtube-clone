@@ -8,6 +8,7 @@ import {
   getLoginHistory,
   getTrustedDevices,
   removeTrustedDevice,
+  updateSubscription,
 } from "../controllers/userController.js";
 
 const router = express.Router();
@@ -18,17 +19,20 @@ router.route("/").get(getUsers).post(createUser);
 // POST = real login (trusted check + OTP flow)
 router.route("/login").post(loginUser);
 
-// POST = OTP verify karo
+// POST = verify the OTP code
 router.route("/verify-otp").post(verifyOtp);
 
-// GET =one user's login history
+// GET = login history of one user
 router.route("/login-history/:userId").get(getLoginHistory);
 
 // GET + DELETE = trusted devices
 router.route("/trusted-devices/:userId").get(getTrustedDevices);
 router.route("/trusted-devices/:id").delete(removeTrustedDevice);
 
-// PUT /api/users/:id/theme - save theme preference
+// PUT = save theme preference
 router.route("/:id/theme").put(updateUserTheme);
+
+// PUT = update subscription plan
+router.route("/:id/subscription").put(updateSubscription);
 
 export default router;

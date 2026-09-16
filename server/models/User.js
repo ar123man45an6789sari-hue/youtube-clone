@@ -27,8 +27,11 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
-    otpCode: { type: String, default: "" },
+   otpCode: { type: String, default: "" },
     otpExpires: { type: Date, default: null },
+    plan: { type: String, default: "Free" }, // Free | Bronze | Silver | Gold
+    planStart: { type: Date, default: null },
+    planExpiry: { type: Date, default: null },
   },
   { timestamps: true } 
 );
