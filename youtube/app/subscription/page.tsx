@@ -10,6 +10,7 @@ import { PLANS } from "../lib/plans";
 const SubscriptionPage = () => {
   const { user } = useAuth();
   const [current, setCurrent] = useState<any>(null);
+   const [bills, setBills] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user?._id) return;
@@ -20,6 +21,9 @@ const SubscriptionPage = () => {
         if (data.success) {
           setCurrent(data.data.find((u: any) => u._id === user._id));
         }
+        const billRes = await fetch(`${API}/api/payments/user/${user._id}`);
+        const billData = await billRes.json();
+        if (billData.success) setBills(billData.data);
       } catch (error) {
         console.error("Failed to load user:", error);
       }
@@ -114,13 +118,41 @@ const SubscriptionPage = () => {
         </div>
       </section>
 
-      {/* billing history (transactions arrive with Razorpay) */}
+      {/* billing history from the transactions collection */}
       <section className="rounded-2xl border p-6 shadow-sm">
         <h2 className="font-medium">Billing History</h2>
-        <p className="mt-3 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
-          No payments yet. Your invoices will appear here after your first paid
-          subscription.
-        </p>
+        {bills.length === 0 ? (
+          <p className="mt-3 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
+            No payments yet. Your invoices will appear here after your first
+            paid subscription.
+          </p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {bills.map((b: any) => (
+              <div
+                key={b._id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-gray-50 px-4 py-3 text-sm"
+              >
+                <div>
+                  <p className="font-medium">{b.invoiceNo}</p>
+                  <p className="text-xs text-gray-500">
+                    {b.plan} plan • {new Date(b.createdAt).toLocaleString()}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium">₹{b.amount}</p>
+                  <span
+                    className={`text-xs font-semibold ${
+                      b.status === "success" ? "text-green-600" : "text-red-600"
+                    }`}
+                  >
+                    {b.status.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {current?.plan !== "Free" && !active && (

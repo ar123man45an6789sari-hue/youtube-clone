@@ -8,6 +8,7 @@ import userRoutes from './routes/userRoutes.js';
 import videoRoutes from './routes/videoRoutes.js';
 import channelRoutes from './routes/channelRoutes.js';
 import commentRoutes from './routes/commentRoutes.js';
+import paymentRoutes from "./routes/paymentRoutes.js";
 
 dotenv.config();
 
@@ -19,6 +20,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/videos", videoRoutes);
 app.use("/api/channels", channelRoutes);
 app.use("/api/comments", commentRoutes);
+app.use("/api/payments", paymentRoutes);
 
 // 🔥 BULLETPROOF PASSWORD RESET ROUTE (Directly in index.js) 🔥
 let User;

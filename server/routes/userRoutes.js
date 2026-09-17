@@ -35,4 +35,4 @@ router.route("/:id/theme").put(updateUserTheme);
 // PUT = update subscription plan
 router.route("/:id/subscription").put(updateSubscription);
 
-export default router;
+export default router;  
