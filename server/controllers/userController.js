@@ -5,7 +5,10 @@ import TrustedDevice from "../models/TrustedDevice.js";
 // fetch all users from the database
 const getUsers = async (req, res) => {
   try {
-    const users = await User.find({});
+        const users = await User.find({});
+    for (const u of users) {
+      await applyExpiryCheck(u);
+    }
     res.status(200).json({ success: true, data: users });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -139,7 +142,21 @@ const getDeviceInfo = async (req) => {
 
   return { ip, city, state, country, browser, os, deviceType };
 };
-
+// if the plan has expired, downgrade the user back to Free (data preserved)
+const applyExpiryCheck = async (user) => {
+  if (
+    user.plan &&
+    user.plan !== "Free" &&
+    user.planExpiry &&
+    new Date(user.planExpiry) < new Date()
+  ) {
+    user.plan = "Free";
+    user.planStart = null;
+    user.planExpiry = null;
+    await user.save();
+  }
+  return user;
+};
 // real login: password verify + trusted device check + OTP (Task 5)
 const loginUser = async (req, res) => {
   try {
@@ -151,6 +168,7 @@ const loginUser = async (req, res) => {
         .status(401)
         .json({ success: false, message: "Invalid email or password!" });
     }
+        await applyExpiryCheck(user);
 
     const info = await getDeviceInfo(req);
     const token = deviceToken || "";

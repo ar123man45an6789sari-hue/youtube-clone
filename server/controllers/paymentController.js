@@ -42,6 +42,47 @@ const createOrder = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+// confirmation email with invoice details (reuses the OTP mail setup)
+const sendPaymentEmail = async (to, name, plan, amount, invoiceNo, expiry) => {
+  const mailUser = process.env.MAIL_USER;
+  const mailPass = process.env.MAIL_PASS;
+  if (!mailUser || !mailPass) {
+    console.log("MAIL env not set - skipping payment email");
+    return;
+  }
+
+  try {
+    const nodemailer = (await import("nodemailer")).default;
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: mailUser, pass: mailPass },
+      connectionTimeout: 4000,
+      greetingTimeout: 4000,
+      socketTimeout: 6000,
+    });
+
+    await transporter.sendMail({
+      from: mailUser,
+      to,
+      subject: `Payment successful - ${plan} plan activated`,
+      text: [
+        `Hi ${name},`,
+        "",
+        "Your payment was successful and your subscription is now active.",
+        "",
+        `Invoice: ${invoiceNo}`,
+        `Plan: ${plan}`,
+        `Amount: Rs.${amount}`,
+        `Valid till: ${expiry.toLocaleDateString()}`,
+        "",
+        "Thank you for subscribing!",
+        "- YouTube Clone",
+      ].join("\n"),
+    });
+  } catch (error) {
+    console.log("Payment email failed:", error.message);
+  }
+};
 
 // verify payment signature, save transaction and activate the plan
 const verifyPayment = async (req, res) => {
@@ -80,7 +121,7 @@ const verifyPayment = async (req, res) => {
       { new: true }
     );
 
-    await Transaction.create({
+       await Transaction.create({
       userId,
       plan,
       invoiceNo,
@@ -90,6 +131,16 @@ const verifyPayment = async (req, res) => {
       status: "success",
       paidAt: now,
     });
+
+    // confirmation email with invoice details (fire and forget)
+    sendPaymentEmail(
+      user.email,
+      user.name,
+      plan,
+      PLAN_PRICE[plan] || 0,
+      invoiceNo,
+      new Date(user.planExpiry)
+    ).catch(() => {});
 
     res.status(200).json({ success: true, data: user });
   } catch (error) {
