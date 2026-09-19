@@ -1,14 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-
-// Apne routes ko import kar (agar folder ka naam alag hai toh path change kar lena)
 import connectDB from './db.js'; 
 import userRoutes from './routes/userRoutes.js';
 import videoRoutes from './routes/videoRoutes.js';
 import channelRoutes from './routes/channelRoutes.js';
 import commentRoutes from './routes/commentRoutes.js';
 import paymentRoutes from "./routes/paymentRoutes.js";
+import downloadRoutes from "./routes/downloadRoutes.js";
 
 dotenv.config();
 
@@ -21,6 +20,7 @@ app.use("/api/videos", videoRoutes);
 app.use("/api/channels", channelRoutes);
 app.use("/api/comments", commentRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/downloads", downloadRoutes);
 
 // 🔥 BULLETPROOF PASSWORD RESET ROUTE (Directly in index.js) 🔥
 let User;
