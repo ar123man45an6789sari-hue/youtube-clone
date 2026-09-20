@@ -1,7 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Download } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { API } from "../lib/api";
 import VideoCard from "./VideoCard";
 import VideoActions from "./VideoActions";
 import CommentSection from "./CommentSection";
@@ -18,6 +21,71 @@ const VideoPageClient = ({
 }) => {
   // theater mode = player goes full width, like real YouTube
   const [theater, setTheater] = useState(false);
+    const { user } = useAuth();
+  const [quota, setQuota] = useState<any>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [dlMsg, setDlMsg] = useState("");
+  const [dlOk, setDlOk] = useState(true);
+
+  // load today's download quota for the logged-in user
+  useEffect(() => {
+    if (!user?._id) return;
+    const loadQuota = async () => {
+      try {
+        const res = await fetch(`${API}/api/downloads/user/${user._id}`);
+        const data = await res.json();
+        if (data.success) setQuota(data.data);
+      } catch (error) {
+        console.error("Failed to load download quota:", error);
+      }
+    };
+    loadQuota();
+  }, [user]);
+
+  // download flow: backend checks quota, then the file download starts
+  const handleDownload = async () => {
+    if (!user) {
+      setDlOk(false);
+      setDlMsg("Please sign in to download videos.");
+      return;
+    }
+    setDownloading(true);
+    setDlMsg("");
+    try {
+      const res = await fetch(`${API}/api/downloads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user._id, videoId: video._id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setQuota({
+          remainingToday: data.data.remainingToday,
+          limit: data.data.limit,
+          plan: data.data.plan,
+        });
+        const a = document.createElement("a");
+        a.href = data.data.download.videoUrl;
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.download = data.data.download.title || "video";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setDlOk(true);
+        setDlMsg(`Download started! ${data.data.remainingToday} downloads left today.`);
+      } else {
+        setDlOk(false);
+        setDlMsg(data.message || "Download failed.");
+      }
+    } catch (error) {
+      console.error("Download failed:", error);
+      setDlOk(false);
+      setDlMsg("Download failed. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <main
@@ -82,6 +150,35 @@ const VideoPageClient = ({
           <p className="mt-2 text-gray-700">
             {video.description || "No description available for this video."}
           </p>
+        </div>
+
+               {/* download section with plan-based quota (Task 2) */}
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border p-4">
+          <button
+            onClick={handleDownload}
+            disabled={downloading}
+            className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            <Download size={16} />
+            {downloading ? "Starting..." : "Download"}
+          </button>
+          {quota && (
+            <span className="text-xs text-gray-600">
+              {quota.plan} plan • {quota.remainingToday} of {quota.limit} downloads
+              left today
+            </span>
+          )}
+          {dlMsg && (
+            <span className={`text-xs ${dlOk ? "text-green-700" : "text-red-600"}`}>
+              {dlMsg}
+            </span>
+          )}
+          <Link
+            href="/downloads"
+            className="ml-auto text-xs font-medium text-blue-600 hover:underline"
+          >
+            My Downloads
+          </Link>
         </div>
 
         <CommentSection videoId={video._id} />
