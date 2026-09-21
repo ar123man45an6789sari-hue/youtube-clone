@@ -15,6 +15,8 @@ import {
   Music2,
   Lightbulb,
   Podcast,
+  ShieldCheck,
+  Download,
 } from "lucide-react";
 
 type SidebarProps = {
@@ -32,8 +34,9 @@ const personalLinks = [
   { icon: History, label: "History", href: "/history" },
   { icon: Clock, label: "Watch Later", href: "/watch-later" },
   { icon: ThumbsUp, label: "Liked Videos", href: "/liked" },
+  { icon: Download, label: "Downloads", href: "/downloads" },
+  { icon: ShieldCheck, label: "Security", href: "/security" },
 ];
-
 const exploreLinks = [
   { icon: Film, label: "Movies", href: "/" },
   { icon: Gamepad2, label: "Gaming", href: "/" },
@@ -56,10 +59,10 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
       )}
 
       {/* Sidebar */}
-      <aside
-        className={`fixed top-[57px] left-0 z-40 h-[calc(100vh-57px)] w-60 overflow-y-auto border-r bg-white transition-transform duration-200 ${
+        <aside
+        className={`fixed top-[57px] left-0 z-40 h-[calc(100vh-57px)] w-60 shrink-0 overflow-y-auto border-r bg-white transition-transform duration-200 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:sticky lg:translate-x-0 ${!isOpen ? "lg:-translate-x-full" : ""}`}
+        } lg:sticky lg:translate-x-0`}
       >
         <nav className="p-2">
           {/* Main */}

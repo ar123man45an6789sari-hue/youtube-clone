@@ -1,6 +1,5 @@
 import { API } from "./lib/api";
 import VideoCard from "./components/VideoCard";
-
 const Home = async () => {
   let videos = [];
 
@@ -15,8 +14,8 @@ const Home = async () => {
   }
 
   return (
-    <main className="mx-auto max-w-7xl p-6">
-      <h1 className="mb-6 text-2xl font-semibold">YouTube Clone</h1>
+        <main className="mx-auto w-full max-w-7xl p-4 sm:p-6">
+
 
       {videos.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -35,7 +34,7 @@ const Home = async () => {
           </a>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+         <div className="grid w-full grid-cols-1 gap-4 gap-y-8 sm:grid-cols-2 sm:gap-x-4 lg:grid-cols-3 xl:grid-cols-4">
           {videos.map((video: any) => (
             <VideoCard
               key={video._id}
