@@ -17,6 +17,7 @@ import {
   Podcast,
   ShieldCheck,
   Download,
+  Video,
 } from "lucide-react";
 
 type SidebarProps = {
@@ -28,6 +29,7 @@ const mainLinks = [
   { icon: Home, label: "Home", href: "/" },
   { icon: Flame, label: "Trending", href: "/" },
   { icon: PlaySquare, label: "Subscriptions", href: "/" },
+  { icon: Video, label: "Video Meet", href: "/meet" },
 ];
 
 const personalLinks = [
