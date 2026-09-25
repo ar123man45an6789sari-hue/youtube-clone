@@ -526,11 +526,24 @@ const MeetContent = () => {
         isHostRef.current = host;
         setIsHost(host);
 
-        // host owns the room id; guests get a random peer id
+       // host owns the room id; guests get a random peer id
         const peer = new Peer(
           host
             ? `yc-clone-${room}`
-            : `yc-clone-guest-${Math.random().toString(36).slice(2, 10)}`
+            : `yc-clone-guest-${Math.random().toString(36).slice(2, 10)}`,
+          // public STUN + TURN servers help phones on mobile networks connect
+          {
+            config: {
+              iceServers: [
+                { urls: "stun:stun.l.google.com:19302" },
+                {
+                  urls: "turn:openrelay.metered.ca:80",
+                  username: "openrelayproject",
+                  credential: "openrelayproject",
+                },
+              ],
+            },
+          }
         );
         peerRef.current = peer;
 
