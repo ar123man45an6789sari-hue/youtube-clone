@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# YouTube Clone — Full Stack Internship Project
 
-## Getting Started
+A YouTube-style video platform built during training and extended with
+internship tasks (video calling, subscriptions, downloads, security,
+multilingual comments and a custom video player).
 
-First, run the development server:
+## Live Demo
+- Frontend (Vercel): https://youtube-clone-alpha-navy-45.vercel.app
+- Backend API (Render): https://youtube-clone-fx5u.onrender.com
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Tech Stack
+- Frontend: Next.js 16 (App Router), TypeScript, React 19, Tailwind CSS v4, PeerJS
+- Backend: Node.js, Express 5, Mongoose (ES Modules)
+- Database: MongoDB Atlas
+- Media storage: Cloudinary
+- Payments: Razorpay (test mode)
+- Emails: Nodemailer (Gmail app password)
+- Deployment: Vercel (frontend) + Render (backend)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Features
+### Core platform
+- Video upload with Cloudinary storage and thumbnails
+- Home feed, channel pages, search, history, liked videos, watch later
+- Custom HTML5 video player: keyboard shortcuts, speeds, theater mode,
+  picture-in-picture, resume playback, buffered bar, hover time preview,
+  captions demo (WebVTT) and autoplay-next countdown
+- Comments with replies, likes/dislikes, edit window, delete and sorting
+- Authentication: signup, login, forgot/reset password, session context
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Internship tasks
+- Task 1 — Group video calling (PeerJS mesh, up to 4 participants) with host
+  controls: lock room, remove user, mute/unmute-all, co-host assignment,
+  room chat, raise hand, screen share and session-end broadcast
+- Task 2 — Controlled downloads: plan-based daily quota, download records
+  and a downloads library page
+- Task 3 — Subscription plans (Free/Bronze/Silver/Gold), Razorpay test
+  payments with signature verification, billing history, confirmation
+  emails and automatic expiry downgrade
+- Task 4 — Custom video player (see above)
+- Task 5 — Security: new-device OTP login over real Gmail, trusted devices,
+  login history with IP/location/browser, security page, IST-based automatic
+  theme with manual override
+- Task 6 — Comment safety and translation: MyMemory translation button,
+  profanity filter, spam rate-limit with captcha, link/emoji-flood blocking,
+  reporting with admin moderation list
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Project Structure
+- `youtube/` — Next.js frontend (app router pages, components, context, lib)
+- `server/` — Express backend (models, controllers, routes, db.js, index.js)
 
-## Learn More
+## Local Setup
+Backend:
+1. `cd server` and `npm install`
+2. Create `.env` with: MONGO_URI, MAIL_USER, MAIL_PASS, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET
+3. `npm run dev` (runs on http://localhost:5000)
 
-To learn more about Next.js, take a look at the following resources:
+Frontend:
+1. `cd youtube` and `npm install`
+2. Create `.env.local` with: NEXT_PUBLIC_API_URL=http://localhost:5000
+3. `npm run dev` (runs on http://localhost:3000)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Notes
+- Razorpay is used in TEST mode only; signature verification happens on the backend.
+- PeerJS public cloud is used for call signaling; media flows peer-to-peer.
+- Translation uses the free MyMemory API and falls back gracefully on failure.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Internship
+Elevance Skills internship project — day-wise progress is visible in the
+git commit history (Day 1 to Day 30).

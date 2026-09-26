@@ -32,7 +32,7 @@ const createVideo = async (req, res) => {
 
 
 
-// Views count badhao
+// Views count increment
 const incrementViews = async (req, res) => {
   try {
     const video = await Video.findById(req.params.id);
@@ -50,7 +50,7 @@ const incrementViews = async (req, res) => {
 // Like/Dislike toggle
 const toggleLike = async (req, res) => {
   try {
-    const { userId } = req.body; // Frontend se user ID aayegi
+    const { userId } = req.body; // user id come from frontend
     const video = await Video.findById(req.params.id);
     if (!video) {
       return res.status(404).json({ success: false, message: "Video not found" });
@@ -60,10 +60,10 @@ const toggleLike = async (req, res) => {
     const alreadyLiked = video.likes.includes(userId);
     
     if (alreadyLiked) {
-      // Unlike karo
+            // Remove the like
       video.likes = video.likes.filter(id => id.toString() !== userId);
     } else {
-      // Like karo (aur dislike hatao agar hai toh)
+           // Add the like and remove the dislike if present
       video.likes.push(userId);
       video.dislikes = video.dislikes.filter(id => id.toString() !== userId);
     }

@@ -28,7 +28,7 @@ type SidebarProps = {
 const mainLinks = [
   { icon: Home, label: "Home", href: "/" },
   { icon: Flame, label: "Trending", href: "/" },
-  { icon: PlaySquare, label: "Subscriptions", href: "/" },
+  { icon: PlaySquare, label: "Subscriptions", href: "/subscriptions" },
   { icon: Video, label: "Video Meet", href: "/meet" },
 ];
 
@@ -40,13 +40,13 @@ const personalLinks = [
   { icon: ShieldCheck, label: "Security", href: "/security" },
 ];
 const exploreLinks = [
-  { icon: Film, label: "Movies", href: "/" },
-  { icon: Gamepad2, label: "Gaming", href: "/" },
-  { icon: Newspaper, label: "News", href: "/" },
-  { icon: Trophy, label: "Sports", href: "/" },
-  { icon: Music2, label: "Music", href: "/" },
-  { icon: Lightbulb, label: "Learning", href: "/" },
-  { icon: Podcast, label: "Podcasts", href: "/" },
+   { icon: Film, label: "Movies", href: "/search?q=movies" },
+  { icon: Gamepad2, label: "Gaming", href: "/search?q=gaming" },
+  { icon: Newspaper, label: "News", href: "/search?q=news" },
+  { icon: Trophy, label: "Sports", href: "/search?q=sports" },
+  { icon: Music2, label: "Music", href: "/search?q=music" },
+  { icon: Lightbulb, label: "Learning", href: "/search?q=learning" },
+  { icon: Podcast, label: "Podcasts", href: "/search?q=podcasts" },
 ];
 
 const Sidebar = ({ isOpen, onClose }: SidebarProps) => {

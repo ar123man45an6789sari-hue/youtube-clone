@@ -9,7 +9,7 @@ const commentSchema = new mongoose.Schema(
     },
     userId: {
       type: String,
-      default: "", // logged-in user ki id (guests ke liye khali)
+      default: "", // logged-in user ki id (empty for guest)
     },
     userName: {
       type: String,
@@ -22,11 +22,11 @@ const commentSchema = new mongoose.Schema(
     parentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Comment",
-      default: null, // null = top level comment, warna reply
+      default: null, // null = top level comment, then  reply
     },
     likes: {
       type: [String],
-      default: [], // jin users ne like kiya unki ids
+      default: [], // ids of the users who liked this comment
     },
     dislikes: {
       type: [String],
