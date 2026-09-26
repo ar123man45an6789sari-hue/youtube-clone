@@ -6,7 +6,7 @@ const EDIT_LIMIT_MIN = 10;
 // simple bad-words list for the profanity filter
 const BAD_WORDS = [
   "fuck", "shit", "bitch", "bastard", "asshole",
-  "madharchod", "bhosdike", "chutiya", "randi", "harami", "saala","RASCAL", "CHUTMARIKE","bhosda","chodu","gandu","lodu","lund","loda","lund kaat","lund kaatna","lund kaat ke khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke  khana","lund kaat ke khanna", "gand",
+  "madharchod", "bhosdike", "chutiya", "randi", "harami", "saala","RASCAL", "CHUTMARIKE","bhosda","chodu","gandu","lodu","lund","loda","lund kaat","lund kaatna","lund kaat ke khana","lund kaat ke  khana", "gand","sala","lauda",
 ];
 
 const safeArrays = (comment) => {

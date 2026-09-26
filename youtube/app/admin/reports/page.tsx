@@ -22,7 +22,7 @@ export default function AdminReportsPage() {
     <main className="mx-auto max-w-3xl space-y-6 p-6">
       <h1 className="text-2xl font-semibold">Reported Comments 🛡️</h1>
       <p className="text-sm text-gray-500">
-        Moderation queue: reported comments yahan review ke liye aate hain.
+        Moderation queue: reported comments land here for review.
       </p>
 
       {reports.length === 0 && (

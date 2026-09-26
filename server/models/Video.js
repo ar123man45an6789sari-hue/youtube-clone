@@ -4,11 +4,11 @@ const videoSchema = new mongoose.Schema(
   {
     title: { type: String, required: true },
     description: { type: String, default: "" },
-    videoUrl: { type: String, required: true },   // Cloudinary wala link
-    thumbnail: { type: String, default: "" },     // Cloudinary wala image link
+    videoUrl: { type: String, required: true },   // Cloudinary video link
+    thumbnail: { type: String, default: "" },     // Cloudinary image link
     channel: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Channel",        // Video kisi Channel ki hai
+      ref: "Channel",        // video of any channel
       required: true,
     },
     views: { type: Number, default: 0 },
