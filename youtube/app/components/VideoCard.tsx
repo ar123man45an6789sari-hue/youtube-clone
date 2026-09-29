@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 type VideoCardProps = {
@@ -20,15 +23,38 @@ const seedFromId = (id: string) => {
 };
 
 const VideoCard = ({ id, title, channel, views, time, thumbnail }: VideoCardProps) => {
+  const [percent, setPercent] = useState(0);
+  const [completed, setCompleted] = useState(false);
+
+  // read the watch position saved by the video player (browser only)
+  useEffect(() => {
+    const saved = Number(localStorage.getItem(`progress-${id}`) || 0);
+    const duration = Number(localStorage.getItem(`duration-${id}`) || 0);
+    const done = localStorage.getItem(`completed-${id}`) === "true";
+    setCompleted(done);
+    if (!done && duration > 0 && saved > 0) {
+      setPercent(Math.min(100, Math.round((saved / duration) * 100)));
+    }
+  }, [id]);
+
   return (
     <Link href={`/video/${id}`} className="block cursor-pointer space-y-2">
-      <div className="aspect-video w-full overflow-hidden rounded-xl bg-gray-200">
+      <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-gray-200">
         {/* Show the real thumbnail if available, otherwise a stable placeholder */}
         <img
           src={thumbnail || `https://picsum.photos/seed/${seedFromId(String(id))}/640/360`}
           alt={title}
           className="h-full w-full object-cover transition-transform hover:scale-105"
         />
+        {/* YouTube-style red watch progress bar */}
+        {(percent > 0 || completed) && (
+          <div className="absolute bottom-0 left-0 h-1 w-full bg-gray-400/60">
+            <div
+              className="h-full bg-red-600"
+              style={{ width: `${completed ? 100 : percent}%` }}
+            />
+          </div>
+        )}
       </div>
 
       <div className="flex gap-3">

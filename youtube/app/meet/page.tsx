@@ -98,7 +98,7 @@ const MeetContent = () => {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [cameraError, setCameraError] = useState("");
   const [setupNonce, setSetupNonce] = useState(0);
-
+  const [wasInCall, setWasInCall] = useState(false);
   // true once at least one remote stream is attached
   const inCall = participants.some((p) => p.stream !== null);
   const hostPeerId = `yc-clone-${roomId}`;
@@ -117,6 +117,11 @@ const MeetContent = () => {
   const openChat = (value: boolean) => {
     setChatOpen(value);
   };
+
+    // remember that we were in a call so the Rejoin button can appear
+  useEffect(() => {
+    if (inCall) setWasInCall(true);
+  }, [inCall]);
 
   // call timer
   useEffect(() => {
@@ -472,9 +477,13 @@ const MeetContent = () => {
     };
 
     // UI buttons outside the effect call these helpers
-    controlsRef.current = {
+ controlsRef.current = {
       sendToAll,
       killAll,
+      resetRoom: () => {
+        setParts([]);
+        setMessages([]);
+      },
       removeParticipant,
       assignCoHost,
       requestRemove: (id: string) => {
@@ -518,6 +527,16 @@ const MeetContent = () => {
         setMessages([]);
         setSeconds(0);
         setMyRaised(false);
+
+                // drop any previous run's peer and connections (rejoin / retry)
+        if (peerRef.current) {
+          try {
+            peerRef.current.destroy();
+          } catch {}
+          peerRef.current = null;
+        }
+        connsRef.current.clear();
+        callsRef.current.clear();
 
         const room = roomParam || Math.random().toString(36).slice(2, 8);
         setRoomId(room);
@@ -611,6 +630,12 @@ const MeetContent = () => {
           wireCall(id, call);
         });
 
+                // signaling dropped (network blip): try to come back automatically
+          peer.on("disconnected", () => {
+          setStatus("Connection lost. Trying to reconnect...");
+          peer.reconnect();
+        });
+
         peer.on("error", (err: any) => {
           setStatus(
             err.type === "peer-unavailable"
@@ -637,6 +662,15 @@ const MeetContent = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomParam, setupNonce]);
 
+    // start this room again after the call ended
+  const rejoinRoom = () => {
+    controlsRef.current?.resetRoom();
+    setSeconds(0);
+    setWasInCall(false);
+    setMyRaised(false);
+    setStatus("Starting camera...");
+    setSetupNonce((n) => n + 1);
+  };
   const retryCamera = () => {
     cameraPromiseRef.current = null;
     setCameraError("");
@@ -970,6 +1004,15 @@ const MeetContent = () => {
           >
             {locked ? <Lock size={16} /> : <LockOpen size={16} />}
             {locked ? "Unlock Room" : "Lock Room"}
+          </button>
+        )}
+                {wasInCall && !inCall && (
+          <button
+            onClick={rejoinRoom}
+            className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            title="Rejoin this room"
+          >
+            <RotateCw size={16} /> Rejoin Room
           </button>
         )}
         <button

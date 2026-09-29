@@ -1,5 +1,19 @@
+import Link from "next/link";
 import { API } from "./lib/api";
 import VideoCard from "./components/VideoCard";
+
+// category chips row (YouTube style) - each chip opens a search for that topic
+const CATEGORIES = [
+  "All",
+  "Music",
+  "Gaming",
+  "News",
+  "Sports",
+  "Movies",
+  "Learning",
+  "Podcasts",
+];
+
 const Home = async () => {
   let videos = [];
 
@@ -14,8 +28,19 @@ const Home = async () => {
   }
 
   return (
-        <main className="mx-auto w-full max-w-7xl p-4 sm:p-6">
-
+    <main className="mx-auto w-full max-w-7xl p-4 sm:p-6">
+      {/* category chips */}
+      <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
+        {CATEGORIES.map((c) => (
+          <Link
+            key={c}
+            href={c === "All" ? "/" : `/search?q=${c.toLowerCase()}`}
+            className="shrink-0 rounded-full border border-gray-300 bg-white px-4 py-1.5 text-sm font-medium hover:bg-gray-100 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:bg-neutral-800"
+          >
+            {c}
+          </Link>
+        ))}
+      </div>
 
       {videos.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -34,7 +59,7 @@ const Home = async () => {
           </a>
         </div>
       ) : (
-         <div className="grid w-full grid-cols-1 gap-4 gap-y-8 sm:grid-cols-2 sm:gap-x-4 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid w-full grid-cols-1 gap-4 gap-y-8 sm:grid-cols-2 sm:gap-x-4 lg:grid-cols-3 xl:grid-cols-4">
           {videos.map((video: any) => (
             <VideoCard
               key={video._id}

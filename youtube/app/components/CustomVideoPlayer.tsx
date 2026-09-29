@@ -263,9 +263,9 @@ const CustomVideoPlayer = ({
 
     // save watch progress every 5 seconds
     if (Math.floor(video.currentTime) % 5 === 0) {
-      localStorage.setItem(`progress-${videoId}`, String(video.currentTime));
+     localStorage.setItem(`progress-${videoId}`, String(video.currentTime));
+      localStorage.setItem(`duration-${videoId}`, String(video.duration || 0));
     }
-
     // mark video as completed after 90% watched
     if (video.duration && video.currentTime / video.duration > 0.9) {
       localStorage.setItem(`completed-${videoId}`, "true");
