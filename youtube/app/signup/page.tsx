@@ -2,6 +2,7 @@
 import { API } from "../lib/api";
 
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { CheckCircle, AlertCircle } from "lucide-react";
 import Link from "next/link";
@@ -20,6 +21,8 @@ const SignupPage = () => {
   });
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
@@ -148,26 +151,55 @@ const SignupPage = () => {
             <label className="mb-1 block text-sm font-medium text-gray-700">
               Password
             </label>
-            <input
-              type="password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              placeholder="Minimum 6 characters"
-              className="w-full rounded-lg border px-4 py-2 text-sm focus:border-red-600 focus:outline-none"
-            />
+            <div className="relative">                      <div className="relative">
+              <input
+                type={showPass ? "text" : "password"}
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                placeholder="Minimum 6 characters"
+                className="w-full rounded-lg border px-4 py-2 pr-10 text-sm focus:border-red-600 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPass(!showPass)}
+                title={showPass ? "Hide password" : "Show password"}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+              >
+                {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+              <button
+                type="button"
+                onClick={() => setShowPass(!showPass)}
+                title={showPass ? "Hide password" : "Show password"}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+              >
+                {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
 
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">
               Confirm Password
             </label>
-            <input
-              type="password"
-              value={formData.confirmPassword}
-              onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-              placeholder="Re-enter password"
-              className="w-full rounded-lg border px-4 py-2 text-sm focus:border-red-600 focus:outline-none"
-            />
+            <div className="relative">
+              <input
+                type={showConfirm ? "text" : "password"}
+                value={formData.confirmPassword}
+                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                placeholder="Re-enter password"
+                className="w-full rounded-lg border px-4 py-2 pr-10 text-sm focus:border-red-600 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm(!showConfirm)}
+                title={showConfirm ? "Hide password" : "Show password"}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+              >
+                {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
 
           <button

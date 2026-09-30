@@ -235,7 +235,7 @@ export const reportComment = async (req, res) => {
   }
 };
 
-// moderation list: saare reported comments (admin page ke liye)
+// moderation list:
 export const getReportedComments = async (req, res) => {
   try {
     const list = await Comment.find({ reported: true }).sort({ updatedAt: -1 }).lean();

@@ -1,6 +1,7 @@
 "use client";
 import { API } from "../lib/api";
 import { Suspense, useState, useEffect } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle, AlertCircle, Key } from "lucide-react";
 import Link from "next/link";
@@ -18,7 +19,8 @@ const ResetPasswordContent = () => {
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [loading, setLoading] = useState(false);
   const [verified, setVerified] = useState(false);
-
+  const [showPass, setShowPass] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
@@ -129,7 +131,7 @@ if (!updateRes.ok || !updateData.success) {
                   Enter Reset Code
                 </label>
                 <input
-                  type="text"
+                  type={showPass ? "text" : "password"}
                   value={formData.resetCode}
                   onChange={(e) => setFormData({ ...formData, resetCode: e.target.value })}
                   placeholder="123456"
@@ -156,13 +158,23 @@ if (!updateRes.ok || !updateData.success) {
                 <label className="mb-1 block text-sm font-medium text-gray-700">
                   New Password
                 </label>
-                <input
-                  type="password"
-                  value={formData.newPassword}
-                  onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
-                  placeholder="Minimum 6 characters"
-                  className="w-full rounded-lg border px-4 py-2 text-sm focus:border-red-600 focus:outline-none"
-                />
+                <div className="relative">
+                  <input
+                    type={showPass ? "text" : "password"}
+                    value={formData.newPassword}
+                    onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
+                    placeholder="Minimum 6 characters"
+                    className="w-full rounded-lg border px-4 py-2 pr-10 text-sm focus:border-red-600 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(!showPass)}
+                    title={showPass ? "Hide password" : "Show password"}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
+                    {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
 
               <div>

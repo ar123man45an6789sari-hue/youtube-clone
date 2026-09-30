@@ -2,6 +2,7 @@
 import { API } from "../lib/api";
 
 import { useState, useEffect } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { CheckCircle, AlertCircle, ShieldCheck } from "lucide-react";
 import Link from "next/link";
@@ -21,6 +22,7 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(0);
   const [demoCode, setDemoCode] = useState("");
+  const [showPass, setShowPass] = useState(false);
 
   // unique identity per browser (for trusted devices)
   useEffect(() => {
@@ -220,13 +222,23 @@ const LoginPage = () => {
                 <label className="mb-1 block text-sm font-medium text-gray-700">
                   Password
                 </label>
-                <input
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder="Enter your password"
-                  className="w-full rounded-lg border px-4 py-2 text-sm focus:border-red-600 focus:outline-none"
-                />
+               <div className="relative">
+                  <input
+                    type={showPass ? "text" : "password"}
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    placeholder="Enter your password"
+                    className="w-full rounded-lg border px-4 py-2 pr-10 text-sm focus:border-red-600 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(!showPass)}
+                    title={showPass ? "Hide password" : "Show password"}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
+                    {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
 
               <button

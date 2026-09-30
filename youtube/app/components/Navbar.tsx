@@ -142,8 +142,8 @@ const Navbar = ({ onMenuClick }: NavbarProps) => {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-600">
                 <span className="text-xs text-white">▶</span>
               </div>
-                <span className="text-base font-semibold tracking-tighter sm:text-xl">
-                YouTube Clone
+              <span className="hidden text-base font-semibold tracking-tighter sm:inline sm:text-xl">
+              YouTube Clone
               </span>
             </Link>
           </div>
@@ -196,9 +196,9 @@ const Navbar = ({ onMenuClick }: NavbarProps) => {
                   Sign In
                 </Link>
                 <Link
-                  href="/signup"
-                  className="hidden rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 sm:inline sm:text-sm"
-                >
+                href="/signup"
+                className="rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 sm:text-sm"
+              >
                   Sign Up
                 </Link>
               </>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Download } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
@@ -42,7 +42,18 @@ const VideoPageClient = ({
     loadQuota();
   }, [user]);
 
+    // count one view per real page visit (backend route already exists)
+  const viewCountedRef = useRef(false);
+  useEffect(() => {
+    if (viewCountedRef.current) return;
+    viewCountedRef.current = true;
+    fetch(`${API}/api/videos/${video._id}/views`, { method: "POST" }).catch(
+      () => {}
+    );
+  }, [video._id]);
+
   // download flow: backend checks quota, then the file download starts
+ 
   const handleDownload = async () => {
     if (!user) {
       setDlOk(false);
