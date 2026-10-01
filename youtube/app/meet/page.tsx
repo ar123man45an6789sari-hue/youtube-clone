@@ -2,7 +2,9 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import Peer from "peerjs";
+import { useAuth } from "../context/AuthContext";
 import {
   Mic,
   MicOff,
@@ -21,13 +23,22 @@ import {
   ShieldCheck,
   VolumeX,
   RotateCw,
+  SwitchCamera,
+  Circle,
+  Square,
+  Paperclip,
+  Signal,
+  Gauge,
+  Ban,
 } from "lucide-react";
 
-// format seconds into mm:ss
+// format seconds into hh:mm:ss / mm:ss
 const formatTime = (s: number) => {
-  const m = Math.floor(s / 60);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
-  return `${m}:${sec < 10 ? "0" : ""}${sec}`;
+  const two = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+  return h > 0 ? `${h}:${two(m)}:${two(sec)}` : `${m}:${two(sec)}`;
 };
 
 // one remote person inside the room (the self tile is rendered separately)
@@ -37,12 +48,19 @@ type Participant = {
   raised: boolean;
   cohost: boolean;
   stream: MediaStream | null;
+  muted: boolean; // their microphone status
+  camOff: boolean; // their camera status
+  speaking: boolean;
+  quality: "good" | "fair" | "poor" | "...";
+  canChat: boolean; // host managed permission
+  canShare: boolean;
 };
 
 type ChatMessage = {
   from: string;
   text: string;
   time: number;
+  file?: { name: string; url: string; size: number };
 };
 
 type Toast = {
@@ -53,13 +71,21 @@ type Toast = {
 // internship task asks for group calls up to 4 people, host included
 const MAX_PEOPLE = 4;
 
+// quick emoji row for the in-call chat
+const EMOJIS = ["😀", "😂", "👍", "🙏", "🎉", "❤️", "😮", "👏", "🔥", "✅"];
+
+// files shared over the data channel stay small (2 MB)
+const MAX_FILE_MB = 2;
+
 const MeetContent = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const roomParam = searchParams.get("room") || "";
 
   const selfVideoRef = useRef<HTMLVideoElement>(null);
   const chatBoxRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const peerRef = useRef<Peer | null>(null);
   const myStreamRef = useRef<MediaStream | null>(null);
@@ -78,7 +104,15 @@ const MeetContent = () => {
   const lockedRef = useRef(false);
   const cohostIdRef = useRef("");
   const toastIdRef = useRef(0);
+  const myStateRef = useRef({ muted: false, camOff: false });
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analysersRef = useRef<Map<string, AnalyserNode>>(new Map());
+  const statsRef = useRef<Map<string, { lost: number; received: number }>>(new Map());
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
 
+  const [joined, setJoined] = useState(false); // lobby -> call
+  const [joinInput, setJoinInput] = useState(roomParam);
   const [roomId, setRoomId] = useState("");
   const [status, setStatus] = useState("Starting camera...");
   const [seconds, setSeconds] = useState(0);
@@ -92,6 +126,8 @@ const MeetContent = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatText, setChatText] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
+  const [peopleOpen, setPeopleOpen] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
   const [myRaised, setMyRaised] = useState(false);
   const [locked, setLocked] = useState(false);
   const [isCoHost, setIsCoHost] = useState(false);
@@ -99,6 +135,15 @@ const MeetContent = () => {
   const [cameraError, setCameraError] = useState("");
   const [setupNonce, setSetupNonce] = useState(0);
   const [wasInCall, setWasInCall] = useState(false);
+  const [mySpeaking, setMySpeaking] = useState(false);
+  const [myQuality, setMyQuality] = useState<"good" | "fair" | "poor" | "...">("...");
+  const [facing, setFacing] = useState<"user" | "environment">("user");
+  const [hasTwoCameras, setHasTwoCameras] = useState(false);
+  const [lowBandwidth, setLowBandwidth] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordUrl, setRecordUrl] = useState("");
+  const [myCanChat, setMyCanChat] = useState(true);
+  const [myCanShare, setMyCanShare] = useState(true);
   // true once at least one remote stream is attached
   const inCall = participants.some((p) => p.stream !== null);
   const hostPeerId = `yc-clone-${roomId}`;
@@ -118,7 +163,18 @@ const MeetContent = () => {
     setChatOpen(value);
   };
 
-    // remember that we were in a call so the Rejoin button can appear
+  // a refreshed page remembers the room it was inside (reconnect after refresh)
+  useEffect(() => {
+    if (roomParam) {
+      setJoinInput(roomParam);
+      setJoined(true);
+      return;
+    }
+    const last = sessionStorage.getItem("meetRoom");
+    if (last) setJoinInput(last);
+  }, [roomParam]);
+
+  // remember that we were in a call so the Rejoin button can appear
   useEffect(() => {
     if (inCall) setWasInCall(true);
   }, [inCall]);
@@ -145,7 +201,146 @@ const MeetContent = () => {
     });
   }, [participants]);
 
+  // does this device have a front AND a back camera? (mobile switch button)
   useEffect(() => {
+    if (!joined) return;
+    navigator.mediaDevices
+      ?.enumerateDevices?.()
+      .then((list) => {
+        const cams = list.filter((d) => d.kind === "videoinput");
+        setHasTwoCameras(cams.length > 1);
+      })
+      .catch(() => {});
+  }, [joined]);
+
+  /* ---------- speaking indicator (Web Audio level meter) ---------- */
+  useEffect(() => {
+    if (!joined) return;
+    const makeAnalyser = (key: string, stream: MediaStream | null) => {
+      if (!stream || stream.getAudioTracks().length === 0) return;
+      if (analysersRef.current.has(key)) return;
+      try {
+        if (!audioCtxRef.current) {
+          audioCtxRef.current = new (window.AudioContext ||
+            (window as any).webkitAudioContext)();
+        }
+        const ctx = audioCtxRef.current;
+        const source = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+        analysersRef.current.set(key, analyser);
+      } catch {
+        // some browsers block audio analysis before a user gesture
+      }
+    };
+
+    makeAnalyser("me", myStreamRef.current);
+    participants.forEach((p) => makeAnalyser(p.id, p.stream));
+
+    const level = (analyser: AnalyserNode) => {
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i];
+      return sum / data.length;
+    };
+
+    const timer = setInterval(() => {
+      const mine = analysersRef.current.get("me");
+      if (mine) setMySpeaking(!myStateRef.current.muted && level(mine) > 12);
+
+      let changed = false;
+      const next = partsRef.current.map((p) => {
+        const a = analysersRef.current.get(p.id);
+        if (!a) return p;
+        const speaking = !p.muted && level(a) > 12;
+        if (speaking !== p.speaking) changed = true;
+        return { ...p, speaking };
+      });
+      if (changed) {
+        partsRef.current = next;
+        setParticipants(next);
+      }
+    }, 400);
+
+    return () => clearInterval(timer);
+  }, [participants, joined]);
+
+  /* ---------- connection quality + low bandwidth adaptation ---------- */
+  useEffect(() => {
+    if (!joined) return;
+    const timer = setInterval(async () => {
+      let worst: "good" | "fair" | "poor" | "..." = "...";
+      const updates: Record<string, "good" | "fair" | "poor"> = {};
+
+      for (const [id, call] of callsRef.current.entries()) {
+        const pc: RTCPeerConnection | undefined = call.peerConnection;
+        if (!pc || typeof pc.getStats !== "function") continue;
+        try {
+          const stats = await pc.getStats();
+          let lost = 0;
+          let received = 0;
+          let rtt = 0;
+          stats.forEach((report: any) => {
+            if (report.type === "inbound-rtp" && !report.isRemote) {
+              lost += report.packetsLost || 0;
+              received += report.packetsReceived || 0;
+            }
+            if (report.type === "candidate-pair" && report.state === "succeeded") {
+              rtt = report.currentRoundTripTime || rtt;
+            }
+          });
+
+          const prev = statsRef.current.get(id) || { lost: 0, received: 0 };
+          const dLost = Math.max(0, lost - prev.lost);
+          const dRecv = Math.max(1, received - prev.received);
+          statsRef.current.set(id, { lost, received });
+
+          const lossPct = (dLost / (dLost + dRecv)) * 100;
+          let q: "good" | "fair" | "poor" = "good";
+          if (lossPct > 7 || rtt > 0.6) q = "poor";
+          else if (lossPct > 2 || rtt > 0.3) q = "fair";
+          updates[id] = q;
+          if (worst === "..." || worst === "good") worst = q;
+          if (q === "poor") worst = "poor";
+
+          // low bandwidth adaptation: drop the sending bitrate when the
+          // link is bad (or when the user turns on data saver by hand)
+          const sender = pc
+            .getSenders()
+            .find((s: RTCRtpSender) => s.track?.kind === "video");
+          if (sender) {
+            const params: any = sender.getParameters();
+            if (!params.encodings || params.encodings.length === 0) {
+              params.encodings = [{}];
+            }
+            const weak = q === "poor" || lowBandwidth;
+            params.encodings[0].maxBitrate = weak ? 150000 : 900000;
+            params.encodings[0].scaleResolutionDownBy = weak ? 2 : 1;
+            params.degradationPreference = "maintain-framerate";
+            sender.setParameters(params).catch(() => {});
+          }
+        } catch {
+          // stats are best effort only
+        }
+      }
+
+      if (Object.keys(updates).length > 0) {
+        const next = partsRef.current.map((p) =>
+          updates[p.id] ? { ...p, quality: updates[p.id] } : p
+        );
+        partsRef.current = next;
+        setParticipants(next);
+      }
+      setMyQuality(lowBandwidth ? "fair" : worst);
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, [joined, lowBandwidth]);
+
+  useEffect(() => {
+    if (!joined) return;
     let cancelled = false;
     const myRun = ++runRef.current;
 
@@ -170,6 +365,12 @@ const MeetContent = () => {
             raised: false,
             cohost: false,
             stream: null,
+            muted: false,
+            camOff: false,
+            speaking: false,
+            quality: "...",
+            canChat: true,
+            canShare: true,
             ...patch,
           },
         ]);
@@ -212,15 +413,15 @@ const MeetContent = () => {
         } catch {}
         callsRef.current.delete(id);
       }
+      analysersRef.current.delete(id);
+      statsRef.current.delete(id);
     };
 
     const handleLeave = (id: string) => {
       if (id === myIdRef.current) return;
       const gone = partsRef.current.find((p) => p.id === id);
       const known =
-        Boolean(gone) ||
-        connsRef.current.has(id) ||
-        callsRef.current.has(id);
+        Boolean(gone) || connsRef.current.has(id) || callsRef.current.has(id);
       if (!known) return; // already cleaned up by another event
       dropRefs(id);
       setParts(partsRef.current.filter((p) => p.id !== id));
@@ -243,6 +444,7 @@ const MeetContent = () => {
         } catch {}
       });
       callsRef.current.clear();
+      analysersRef.current.clear();
       peerRef.current?.destroy();
       peerRef.current = null;
       myStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -258,6 +460,7 @@ const MeetContent = () => {
       pushToast(text);
       setParts([]);
       killAll();
+      sessionStorage.removeItem("meetRoom");
       setTimeout(() => router.push("/"), 3000);
     };
 
@@ -265,11 +468,25 @@ const MeetContent = () => {
     const isController = (id: string) =>
       id === `yc-clone-${roomIdRef.current}` || id === cohostIdRef.current;
 
+    // tell the room my current mic/camera state
+    const broadcastState = () => {
+      sendToAll({
+        type: "state",
+        muted: myStateRef.current.muted,
+        camOff: myStateRef.current.camOff,
+      });
+    };
+
     // attach chat/signal handlers to a data connection (incoming or outgoing)
     const wireConn = (id: string, conn: any) => {
       connsRef.current.set(id, conn);
       conn.on("open", () => {
-        conn.send({ type: "hello", name: myNameRef.current });
+        conn.send({
+          type: "hello",
+          name: myNameRef.current,
+          muted: myStateRef.current.muted,
+          camOff: myStateRef.current.camOff,
+        });
       });
       conn.on("data", (d: any) => handleData(id, d));
       conn.on("close", () => handleLeave(id));
@@ -340,9 +557,19 @@ const MeetContent = () => {
 
       if (data.type === "hello") {
         const isNew = !partsRef.current.some((p) => p.id === from);
-        upsert(from, { name: data.name });
+        upsert(from, {
+          name: data.name,
+          muted: Boolean(data.muted),
+          camOff: Boolean(data.camOff),
+        });
         if (isNew) pushToast(`${data.name} joined the room.`);
         if (isHostRef.current) broadcastPeers();
+        broadcastState();
+        return;
+      }
+
+      if (data.type === "state") {
+        upsert(from, { muted: Boolean(data.muted), camOff: Boolean(data.camOff) });
         return;
       }
 
@@ -365,6 +592,12 @@ const MeetContent = () => {
             cohost: entry.cohost,
             raised: old ? old.raised : false,
             stream: old ? old.stream : null,
+            muted: old ? old.muted : false,
+            camOff: old ? old.camOff : false,
+            speaking: false,
+            quality: old ? old.quality : ("..." as const),
+            canChat: old ? old.canChat : true,
+            canShare: old ? old.canShare : true,
           };
         });
         setParts(merged);
@@ -384,6 +617,27 @@ const MeetContent = () => {
         return;
       }
 
+      if (data.type === "file") {
+        // rebuild the shared file as a download link
+        try {
+          const blob = new Blob([data.buffer], { type: data.mime || "application/octet-stream" });
+          const url = URL.createObjectURL(blob);
+          setMessages((prev) => [
+            ...prev,
+            {
+              from: data.name,
+              text: `sent a file: ${data.fileName}`,
+              time: data.time,
+              file: { name: data.fileName, url, size: data.size },
+            },
+          ]);
+          pushToast(`${data.name} shared a file: ${data.fileName}`);
+        } catch {
+          pushToast("A shared file could not be opened.");
+        }
+        return;
+      }
+
       if (data.type === "raise") {
         upsert(from, { raised: Boolean(data.value) });
         pushToast(
@@ -398,12 +652,55 @@ const MeetContent = () => {
         if (!isController(from)) return;
         const track = myStreamRef.current?.getAudioTracks()[0];
         if (track) track.enabled = !data.value;
+        myStateRef.current.muted = Boolean(data.value);
         setMuted(Boolean(data.value));
+        broadcastState();
         pushToast(
           data.value
             ? "You were muted by the host/co-host."
             : "You were unmuted by the host/co-host."
         );
+        return;
+      }
+
+      if (data.type === "mute-one") {
+        if (!isController(from)) return;
+        if (data.id !== myIdRef.current) return;
+        const track = myStreamRef.current?.getAudioTracks()[0];
+        if (track) track.enabled = false;
+        myStateRef.current.muted = true;
+        setMuted(true);
+        broadcastState();
+        pushToast("The host muted your microphone.");
+        return;
+      }
+
+      if (data.type === "perm") {
+        // host managed permissions for chat and screen share
+        if (!isController(from)) return;
+        if (data.id === myIdRef.current) {
+          if (typeof data.chat === "boolean") {
+            setMyCanChat(data.chat);
+            pushToast(
+              data.chat
+                ? "The host allowed you to use the chat."
+                : "The host turned off chat for you."
+            );
+          }
+          if (typeof data.share === "boolean") {
+            setMyCanShare(data.share);
+            pushToast(
+              data.share
+                ? "The host allowed you to share your screen."
+                : "The host turned off screen sharing for you."
+            );
+          }
+        } else {
+          upsert(data.id, {
+            ...(typeof data.chat === "boolean" ? { canChat: data.chat } : {}),
+            ...(typeof data.share === "boolean" ? { canShare: data.share } : {}),
+          });
+        }
         return;
       }
 
@@ -477,15 +774,27 @@ const MeetContent = () => {
     };
 
     // UI buttons outside the effect call these helpers
- controlsRef.current = {
+    controlsRef.current = {
       sendToAll,
       killAll,
+      broadcastState,
       resetRoom: () => {
         setParts([]);
         setMessages([]);
       },
       removeParticipant,
       assignCoHost,
+      muteOne: (id: string) => {
+        sendToAll({ type: "mute-one", id });
+        upsert(id, { muted: true });
+      },
+      setPermission: (id: string, patch: { chat?: boolean; share?: boolean }) => {
+        sendToAll({ type: "perm", id, ...patch });
+        upsert(id, {
+          ...(typeof patch.chat === "boolean" ? { canChat: patch.chat } : {}),
+          ...(typeof patch.share === "boolean" ? { canShare: patch.share } : {}),
+        });
+      },
       requestRemove: (id: string) => {
         if (id === myIdRef.current) return;
         sendToAll({ type: "remove-request", id });
@@ -496,14 +805,19 @@ const MeetContent = () => {
       try {
         // ask for the camera only once per page load (dev mode mounts twice)
         if (!cameraPromiseRef.current) {
-          // capped resolution and frame rate keep encoding light on weak machines
+          // capped resolution + noise suppression for clean audio
           cameraPromiseRef.current = navigator.mediaDevices.getUserMedia({
             video: {
               width: { ideal: 1280 },
               height: { ideal: 720 },
               frameRate: { ideal: 24, max: 30 },
+              facingMode: "user",
             },
-            audio: true,
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true, // background noise suppression
+              autoGainControl: true,
+            },
           });
           // if the device never answers, show a retry hint
           setTimeout(() => {
@@ -528,7 +842,7 @@ const MeetContent = () => {
         setSeconds(0);
         setMyRaised(false);
 
-                // drop any previous run's peer and connections (rejoin / retry)
+        // drop any previous run's peer and connections (rejoin / retry)
         if (peerRef.current) {
           try {
             peerRef.current.destroy();
@@ -538,14 +852,16 @@ const MeetContent = () => {
         connsRef.current.clear();
         callsRef.current.clear();
 
-        const room = roomParam || Math.random().toString(36).slice(2, 8);
+        const wanted = roomParam || joinInput.trim();
+        const room = wanted || Math.random().toString(36).slice(2, 8);
         setRoomId(room);
         roomIdRef.current = room;
-        const host = !roomParam;
+        sessionStorage.setItem("meetRoom", room);
+        const host = !wanted;
         isHostRef.current = host;
         setIsHost(host);
 
-       // host owns the room id; guests get a random peer id
+        // host owns the room id; guests get a random peer id
         const peer = new Peer(
           host
             ? `yc-clone-${room}`
@@ -568,7 +884,13 @@ const MeetContent = () => {
 
         peer.on("open", () => {
           myIdRef.current = peer.id;
-          const name = host ? "Host" : `Guest-${peer.id.slice(-4)}`;
+          // signed-in name is used so everyone sees real participant names
+          const accountName = user?.name || user?.email?.split("@")[0] || "";
+          const name = accountName
+            ? `${accountName}${host ? " (Host)" : ""}`
+            : host
+            ? "Host"
+            : `Guest-${peer.id.slice(-4)}`;
           myNameRef.current = name;
           setMyName(name);
           if (host) {
@@ -626,13 +948,14 @@ const MeetContent = () => {
             } catch {}
             return;
           }
-          call.answer(stream);
+          call.answer(myStreamRef.current || stream);
           wireCall(id, call);
         });
 
-                // signaling dropped (network blip): try to come back automatically
-          peer.on("disconnected", () => {
+        // signaling dropped (network blip): try to come back automatically
+        peer.on("disconnected", () => {
           setStatus("Connection lost. Trying to reconnect...");
+          pushToast("Network interrupted - reconnecting...");
           peer.reconnect();
         });
 
@@ -643,9 +966,13 @@ const MeetContent = () => {
               : `Connection error: ${err.type}`
           );
         });
-      } catch (error) {
+      } catch (error: any) {
+        const denied =
+          error?.name === "NotAllowedError" || error?.name === "SecurityError";
         setCameraError(
-          "Camera/microphone permission denied or device busy. Allow access and press Retry."
+          denied
+            ? "Microphone/camera permission was denied. Allow access in the browser address bar, then press Retry. You can still use chat only."
+            : "Camera/microphone is busy or missing. Close other apps using it and press Retry."
         );
       }
     };
@@ -660,9 +987,9 @@ const MeetContent = () => {
       }, 400);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomParam, setupNonce]);
+  }, [roomParam, setupNonce, joined]);
 
-    // start this room again after the call ended
+  // start this room again after the call ended
   const rejoinRoom = () => {
     controlsRef.current?.resetRoom();
     setSeconds(0);
@@ -671,6 +998,7 @@ const MeetContent = () => {
     setStatus("Starting camera...");
     setSetupNonce((n) => n + 1);
   };
+
   const retryCamera = () => {
     cameraPromiseRef.current = null;
     setCameraError("");
@@ -691,23 +1019,79 @@ const MeetContent = () => {
     }
   };
 
+  const copyRoomId = async () => {
+    try {
+      await navigator.clipboard.writeText(roomId);
+      pushToast(`Room ID ${roomId} copied.`);
+    } catch {
+      prompt("Room ID:", roomId);
+    }
+  };
+
   const toggleMute = () => {
     const stream = myStreamRef.current;
     if (!stream) return;
     const track = stream.getAudioTracks()[0];
+    if (!track) return;
     track.enabled = !track.enabled;
+    myStateRef.current.muted = !track.enabled;
     setMuted(!track.enabled);
+    controlsRef.current?.broadcastState();
   };
 
   const toggleCam = () => {
     const track = cameraTrackRef.current;
     if (!track) return;
     track.enabled = !track.enabled;
+    myStateRef.current.camOff = !track.enabled;
     setCamOff(!track.enabled);
+    controlsRef.current?.broadcastState();
+  };
+
+  // mobile: swap between the front and the rear camera mid-call
+  const switchCamera = async () => {
+    const next = facing === "user" ? "environment" : "user";
+    try {
+      const fresh = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: next } },
+        audio: false,
+      });
+      const newTrack = fresh.getVideoTracks()[0];
+      if (!newTrack) return;
+
+      // send the new camera to everyone already connected
+      for (const call of callsRef.current.values()) {
+        const sender = call.peerConnection
+          ?.getSenders()
+          .find((s: any) => s.track?.kind === "video");
+        if (sender) await sender.replaceTrack(newTrack);
+      }
+
+      const stream = myStreamRef.current;
+      if (stream) {
+        const old = stream.getVideoTracks()[0];
+        if (old) {
+          stream.removeTrack(old);
+          old.stop();
+        }
+        stream.addTrack(newTrack);
+        if (selfVideoRef.current) selfVideoRef.current.srcObject = stream;
+      }
+      cameraTrackRef.current = newTrack;
+      newTrack.enabled = !myStateRef.current.camOff;
+      setFacing(next);
+      pushToast(next === "user" ? "Switched to front camera." : "Switched to rear camera.");
+    } catch {
+      pushToast("This device has no second camera.");
+    }
   };
 
   // screen share replaces the outgoing video track on every active call
   const toggleScreenShare = async () => {
+    if (!myCanShare) {
+      pushToast("The host has turned off screen sharing for you.");
+      return;
+    }
     const calls = Array.from(callsRef.current.values());
     if (calls.length === 0) {
       pushToast("No one is connected yet, nothing to share to.");
@@ -715,9 +1099,7 @@ const MeetContent = () => {
     }
     const senders = calls
       .map((c: any) =>
-        c.peerConnection
-          ?.getSenders()
-          .find((s: any) => s.track?.kind === "video")
+        c.peerConnection?.getSenders().find((s: any) => s.track?.kind === "video")
       )
       .filter(Boolean);
     if (senders.length === 0) return;
@@ -758,14 +1140,104 @@ const MeetContent = () => {
     }
   };
 
+  /* ---------- optional call recording (saved locally) ---------- */
+  const toggleRecording = async () => {
+    if (recording) {
+      recorderRef.current?.stop();
+      return;
+    }
+    const stream = myStreamRef.current;
+    if (!stream) {
+      pushToast("Nothing to record yet.");
+      return;
+    }
+    try {
+      // my camera/screen video + every microphone in the room mixed together
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const destination = ctx.createMediaStreamDestination();
+      const addAudio = (s: MediaStream | null) => {
+        if (!s || s.getAudioTracks().length === 0) return;
+        try {
+          ctx.createMediaStreamSource(s).connect(destination);
+        } catch {}
+      };
+      addAudio(stream);
+      partsRef.current.forEach((p) => addAudio(p.stream));
+
+      const videoTrack =
+        screenStreamRef.current?.getVideoTracks()[0] || stream.getVideoTracks()[0];
+      const mixed = new MediaStream([
+        ...(videoTrack ? [videoTrack] : []),
+        ...destination.stream.getAudioTracks(),
+      ]);
+
+      chunksRef.current = [];
+      const recorder = new MediaRecorder(mixed, { mimeType: "video/webm" });
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: "video/webm" });
+        const url = URL.createObjectURL(blob);
+        setRecordUrl(url);
+        setRecording(false);
+        pushToast("Recording ready - download it from the link below.");
+        ctx.close().catch(() => {});
+      };
+      recorder.start();
+      recorderRef.current = recorder;
+      setRecording(true);
+      pushToast("Recording started (saved only on your device).");
+    } catch {
+      pushToast("Recording is not supported in this browser.");
+    }
+  };
+
   const sendToAll = (msg: any) => controlsRef.current?.sendToAll(msg);
 
   const sendChat = () => {
     const text = chatText.trim();
     if (!text || !inCall) return;
+    if (!myCanChat) {
+      pushToast("The host has turned off chat for you.");
+      return;
+    }
     setMessages((prev) => [...prev, { from: "You", text, time: Date.now() }]);
     sendToAll({ type: "chat", name: myName, text, time: Date.now() });
     setChatText("");
+    setShowEmoji(false);
+  };
+
+  // share a small file (image / pdf / notes) through the data channel
+  const sendFile = async (file: File) => {
+    if (!myCanChat) {
+      pushToast("The host has turned off chat for you.");
+      return;
+    }
+    if (file.size > MAX_FILE_MB * 1024 * 1024) {
+      pushToast(`File too big. Maximum ${MAX_FILE_MB} MB can be shared in chat.`);
+      return;
+    }
+    const buffer = await file.arrayBuffer();
+    sendToAll({
+      type: "file",
+      name: myName,
+      fileName: file.name,
+      mime: file.type,
+      size: file.size,
+      buffer,
+      time: Date.now(),
+    });
+    setMessages((prev) => [
+      ...prev,
+      {
+        from: "You",
+        text: `sent a file: ${file.name}`,
+        time: Date.now(),
+        file: { name: file.name, url: URL.createObjectURL(file), size: file.size },
+      },
+    ]);
+    pushToast(`File sent: ${file.name}`);
   };
 
   const toggleRaiseHand = () => {
@@ -780,6 +1252,7 @@ const MeetContent = () => {
     const next = !muted;
     const track = myStreamRef.current?.getAudioTracks()[0];
     if (track) track.enabled = !next;
+    myStateRef.current.muted = next;
     setMuted(next);
     sendToAll({ type: "mute-all", value: next });
     const text = next
@@ -814,16 +1287,107 @@ const MeetContent = () => {
     if (isHostRef.current) {
       sendToAll({ type: "session-ended" });
     }
+    sessionStorage.removeItem("meetRoom");
     setTimeout(() => {
       controlsRef.current?.killAll();
       router.push("/");
     }, 300);
   };
 
+  const qualityColor = (q: string) =>
+    q === "good"
+      ? "text-green-400"
+      : q === "fair"
+      ? "text-yellow-400"
+      : q === "poor"
+      ? "text-red-400"
+      : "text-gray-400";
+
+  /* ---------- screen 1: sign in gate (secure meeting authentication) ---------- */
+  if (!authLoading && !user) {
+    return (
+      <main className="mx-auto max-w-md space-y-4 p-10 text-center">
+        <h1 className="text-2xl font-semibold">Video Meet</h1>
+        <p className="text-sm text-gray-500">
+          Meetings are protected. Please sign in with your account to create or
+          join a room.
+        </p>
+        <Link
+          href="/login"
+          className="inline-block rounded-full bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700"
+        >
+          Sign In
+        </Link>
+      </main>
+    );
+  }
+
+  /* ---------- screen 2: lobby (new meeting / join with room id) ---------- */
+  if (!joined) {
+    return (
+      <main className="mx-auto max-w-xl space-y-6 p-6">
+        <div className="rounded-2xl border p-6">
+          <h1 className="text-2xl font-semibold">Video Meet</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Secure one-to-one and group calls (up to {MAX_PEOPLE} people) with
+            chat, screen share, raise hand and host controls.
+          </p>
+
+          <button
+            onClick={() => {
+              setJoinInput("");
+              setJoined(true);
+            }}
+            className="mt-5 w-full rounded-full bg-red-600 px-4 py-3 text-sm font-medium text-white hover:bg-red-700"
+          >
+            Start a new meeting
+          </button>
+
+          <div className="my-5 flex items-center gap-3 text-xs text-gray-400">
+            <span className="h-px flex-1 bg-gray-300" /> OR
+            <span className="h-px flex-1 bg-gray-300" />
+          </div>
+
+          <label className="text-sm font-medium">Join with a room ID</label>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+            <input
+              value={joinInput}
+              onChange={(e) => setJoinInput(e.target.value.trim())}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && joinInput.trim()) setJoined(true);
+              }}
+              placeholder="e.g. 8kd2p1 or paste the full link"
+              className="flex-1 rounded-full border px-4 py-2 text-sm outline-none"
+            />
+            <button
+              onClick={() => {
+                // a full invite link also works, we pull the room out of it
+                const value = joinInput.includes("room=")
+                  ? joinInput.split("room=")[1].split("&")[0]
+                  : joinInput;
+                setJoinInput(value.trim());
+                if (value.trim()) setJoined(true);
+              }}
+              disabled={!joinInput.trim()}
+              className="rounded-full bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              Join
+            </button>
+          </div>
+          <p className="mt-3 text-xs text-gray-500">
+            Signed in as {user?.name || user?.email}. Your name is shown to the
+            other participants.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  /* ---------- screen 3: the call ---------- */
   return (
-    <main className="mx-auto max-w-6xl space-y-4 p-4 sm:p-6">
+    <main className="mx-auto max-w-6xl space-y-4 p-3 sm:p-6">
       {/* toast popups */}
-      <div className="pointer-events-none fixed right-4 top-4 z-50 flex w-72 flex-col gap-2">
+      <div className="pointer-events-none fixed right-2 top-2 z-50 flex w-64 flex-col gap-2 sm:right-4 sm:top-4 sm:w-72">
         {toasts.map((t) => (
           <div
             key={t.id}
@@ -839,30 +1403,134 @@ const MeetContent = () => {
         <div>
           <p className="font-semibold">Video Meet</p>
           <p className="text-xs text-gray-500">
-            Room: {roomId || "..."} • You are {myName || "..."}
+            Room: <button onClick={copyRoomId} className="underline">{roomId || "..."}</button>{" "}
+            • You are {myName || "..."} {isHost && "• Host"}
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <Users size={14} />
-          <span>
-            Participants: {participants.length + 1}/{MAX_PEOPLE}
+        <div className="flex items-center gap-3 text-xs text-gray-500">
+          <span className="flex items-center gap-1">
+            <Users size={14} /> {participants.length + 1}/{MAX_PEOPLE}
+          </span>
+          <span className={`flex items-center gap-1 ${qualityColor(myQuality)}`}>
+            <Signal size={14} /> {myQuality}
+          </span>
+          <span className="font-medium">
+            {inCall ? formatTime(seconds) : "00:00"}
           </span>
         </div>
-        <button
-          onClick={copyLink}
-          className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          <Link2 size={14} />
-          {copied ? "Link Copied!" : "Copy Room Link"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setPeopleOpen(!peopleOpen)}
+            className="flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium"
+          >
+            <Users size={14} /> People
+          </button>
+          <button
+            onClick={copyLink}
+            className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            <Link2 size={14} />
+            {copied ? "Link Copied!" : "Copy Room Link"}
+          </button>
+        </div>
       </div>
+
+      {/* participant list panel */}
+      {peopleOpen && (
+        <div className="space-y-2 rounded-2xl border p-4">
+          <p className="text-sm font-semibold">
+            Participants ({participants.length + 1})
+          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-gray-500/10 px-3 py-2 text-sm">
+            <span>
+              {myName} (you) {isHost && "• Host"} {isCoHost && "• Co-host"}
+            </span>
+            <span className="flex items-center gap-2 text-xs">
+              {muted ? <MicOff size={14} className="text-red-500" /> : <Mic size={14} />}
+              {camOff ? <VideoOff size={14} className="text-red-500" /> : <Video size={14} />}
+              <span className={qualityColor(myQuality)}>{myQuality}</span>
+            </span>
+          </div>
+          {participants.map((p) => (
+            <div
+              key={p.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-gray-500/10 px-3 py-2 text-sm"
+            >
+              <span className="flex items-center gap-2">
+                {p.speaking && (
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+                )}
+                {p.name} {p.cohost && "• Co-host"}
+              </span>
+              <span className="flex items-center gap-2 text-xs">
+                {p.muted ? (
+                  <MicOff size={14} className="text-red-500" />
+                ) : (
+                  <Mic size={14} />
+                )}
+                {p.camOff ? (
+                  <VideoOff size={14} className="text-red-500" />
+                ) : (
+                  <Video size={14} />
+                )}
+                <span className={qualityColor(p.quality)}>{p.quality}</span>
+                {canControl && (
+                  <>
+                    <button
+                      onClick={() => controlsRef.current?.muteOne(p.id)}
+                      className="rounded-full border px-2 py-0.5"
+                      title="Mute this participant"
+                    >
+                      Mute
+                    </button>
+                    <button
+                      onClick={() =>
+                        controlsRef.current?.setPermission(p.id, { chat: !p.canChat })
+                      }
+                      className="rounded-full border px-2 py-0.5"
+                      title="Allow or block chat for this participant"
+                    >
+                      {p.canChat ? "Chat ✓" : "Chat ✕"}
+                    </button>
+                    <button
+                      onClick={() =>
+                        controlsRef.current?.setPermission(p.id, { share: !p.canShare })
+                      }
+                      className="rounded-full border px-2 py-0.5"
+                      title="Allow or block screen sharing"
+                    >
+                      {p.canShare ? "Share ✓" : "Share ✕"}
+                    </button>
+                    {isHost && (
+                      <button
+                        onClick={() => makeCoHost(p.id, !p.cohost)}
+                        className="rounded-full border px-2 py-0.5"
+                      >
+                        {p.cohost ? "Remove co-host" : "Make co-host"}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => removePeer(p.id)}
+                      className="rounded-full border border-red-400 px-2 py-0.5 text-red-500"
+                    >
+                      Remove
+                    </button>
+                  </>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* video tiles */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {participants.map((p) => (
           <div
             key={p.id}
-            className="relative overflow-hidden rounded-2xl bg-black"
+            className={`relative overflow-hidden rounded-2xl bg-black ${
+              p.speaking ? "ring-4 ring-green-500" : ""
+            }`}
           >
             <video
               ref={(el) => {
@@ -877,9 +1545,18 @@ const MeetContent = () => {
                 Connecting to {p.name}...
               </p>
             )}
+            {p.camOff && p.stream && (
+              <p className="absolute inset-0 flex items-center justify-center bg-gray-900 text-sm text-gray-300">
+                {p.name}&apos;s camera is off
+              </p>
+            )}
             <span className="absolute left-3 top-3 flex items-center gap-1 rounded bg-black/60 px-2 py-1 text-xs text-white">
               {p.name}
               {p.cohost && <ShieldCheck size={12} className="text-green-400" />}
+              {p.muted ? <MicOff size={12} className="text-red-400" /> : <Mic size={12} />}
+              {p.camOff && <VideoOff size={12} className="text-red-400" />}
+              <Signal size={12} className={qualityColor(p.quality)} />
+              {!p.canChat && <Ban size={12} className="text-orange-400" />}
             </span>
             {p.raised && (
               <span className="absolute right-3 top-3 flex items-center gap-1 rounded bg-yellow-500 px-2 py-1 text-xs text-black">
@@ -888,6 +1565,13 @@ const MeetContent = () => {
             )}
             {canControl && !(isCoHost && p.id === hostPeerId) && (
               <div className="absolute bottom-3 right-3 flex gap-2">
+                <button
+                  onClick={() => controlsRef.current?.muteOne(p.id)}
+                  className="rounded-full bg-gray-700/90 p-2 text-white hover:bg-gray-600"
+                  title="Mute this participant"
+                >
+                  <MicOff size={14} />
+                </button>
                 {isHost && (
                   <button
                     onClick={() => makeCoHost(p.id, !p.cohost)}
@@ -913,18 +1597,31 @@ const MeetContent = () => {
           </div>
         ))}
 
-        {/* self tile (mirrored only for the camera, never while sharing) */}
-        <div className="relative overflow-hidden rounded-2xl bg-black">
+        {/* self tile (mirrored only for the front camera, never while sharing) */}
+        <div
+          className={`relative overflow-hidden rounded-2xl bg-black ${
+            mySpeaking ? "ring-4 ring-green-500" : ""
+          }`}
+        >
           <video
             ref={selfVideoRef}
             autoPlay
             playsInline
             muted
-            className={`aspect-video w-full ${sharing ? "" : "-scale-x-100"}`}
+            className={`aspect-video w-full ${
+              sharing || facing === "environment" ? "" : "-scale-x-100"
+            }`}
           />
-          <span className="absolute left-3 top-3 rounded bg-black/60 px-2 py-1 text-xs text-white">
+          <span className="absolute left-3 top-3 flex items-center gap-1 rounded bg-black/60 px-2 py-1 text-xs text-white">
             You {myName && `(${myName})`}
+            {muted ? <MicOff size={12} className="text-red-400" /> : <Mic size={12} />}
+            {camOff && <VideoOff size={12} className="text-red-400" />}
           </span>
+          {recording && (
+            <span className="absolute right-3 bottom-3 flex items-center gap-1 rounded bg-red-600 px-2 py-1 text-xs text-white">
+              <Circle size={10} className="animate-pulse" fill="currentColor" /> REC
+            </span>
+          )}
           {myRaised && (
             <span className="absolute right-3 top-3 flex items-center gap-1 rounded bg-yellow-500 px-2 py-1 text-xs text-black">
               <Hand size={12} /> Raised hand
@@ -934,7 +1631,7 @@ const MeetContent = () => {
       </div>
 
       {/* controls */}
-      <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl border p-4">
+      <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border p-3 sm:gap-3 sm:p-4">
         <span className="text-sm font-medium">
           {inCall ? formatTime(seconds) : "Not connected"}
         </span>
@@ -956,11 +1653,20 @@ const MeetContent = () => {
         >
           {camOff ? <VideoOff size={18} /> : <Video size={18} />}
         </button>
+        {hasTwoCameras && (
+          <button
+            onClick={switchCamera}
+            className="rounded-full bg-gray-700 p-3 text-white hover:bg-gray-600"
+            title="Switch front / rear camera"
+          >
+            <SwitchCamera size={18} />
+          </button>
+        )}
         <button
           onClick={toggleScreenShare}
           className={`rounded-full p-3 text-white ${
             sharing ? "bg-blue-600" : "bg-gray-700 hover:bg-gray-600"
-          }`}
+          } ${myCanShare ? "" : "opacity-50"}`}
           title="Share screen"
         >
           {sharing ? <MonitorDown size={18} /> : <MonitorUp size={18} />}
@@ -977,13 +1683,36 @@ const MeetContent = () => {
         <button
           onClick={toggleRaiseHand}
           className={`rounded-full p-3 text-white ${
-            myRaised
-              ? "bg-yellow-500 text-black"
-              : "bg-gray-700 hover:bg-gray-600"
+            myRaised ? "bg-yellow-500 text-black" : "bg-gray-700 hover:bg-gray-600"
           }`}
           title="Raise hand"
         >
           <Hand size={18} />
+        </button>
+        <button
+          onClick={() => {
+            setLowBandwidth(!lowBandwidth);
+            pushToast(
+              !lowBandwidth
+                ? "Data saver on - video sent in low quality."
+                : "Data saver off - normal quality."
+            );
+          }}
+          className={`rounded-full p-3 text-white ${
+            lowBandwidth ? "bg-green-600" : "bg-gray-700 hover:bg-gray-600"
+          }`}
+          title="Low bandwidth / data saver mode"
+        >
+          <Gauge size={18} />
+        </button>
+        <button
+          onClick={toggleRecording}
+          className={`rounded-full p-3 text-white ${
+            recording ? "bg-red-600" : "bg-gray-700 hover:bg-gray-600"
+          }`}
+          title="Record this call (saved on your device)"
+        >
+          {recording ? <Square size={18} /> : <Circle size={18} />}
         </button>
         {canControl && (
           <button
@@ -1006,7 +1735,7 @@ const MeetContent = () => {
             {locked ? "Unlock Room" : "Lock Room"}
           </button>
         )}
-                {wasInCall && !inCall && (
+        {wasInCall && !inCall && (
           <button
             onClick={rejoinRoom}
             className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -1018,11 +1747,25 @@ const MeetContent = () => {
         <button
           onClick={endCall}
           className="rounded-full bg-red-600 p-3 text-white hover:bg-red-700"
-          title={isHost ? "End session for everyone" : "End call"}
+          title={isHost ? "End session for everyone" : "Leave call"}
         >
           <PhoneOff size={18} />
         </button>
       </div>
+
+      {/* recording download link */}
+      {recordUrl && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border p-4 text-sm">
+          <span>Your recording is ready (stored only on this device):</span>
+          <a
+            href={recordUrl}
+            download={`meet-${roomId}.webm`}
+            className="rounded-full bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+          >
+            Download recording
+          </a>
+        </div>
+      )}
 
       {/* camera problem box with retry */}
       {cameraError && (
@@ -1040,17 +1783,24 @@ const MeetContent = () => {
       {/* chat panel */}
       {chatOpen && (
         <div className="space-y-2 rounded-2xl border p-4">
-          <div
-            ref={chatBoxRef}
-            className="max-h-48 space-y-1 overflow-y-auto text-sm"
-          >
+          <div ref={chatBoxRef} className="max-h-48 space-y-1 overflow-y-auto text-sm">
             {messages.length === 0 && (
               <p className="text-xs text-gray-500">No messages yet. Say hello!</p>
             )}
             {messages.map((m, i) => (
               <p key={i}>
                 <span className="font-medium">{m.from}: </span>
-                {m.text}
+                {m.file ? (
+                  <a
+                    href={m.file.url}
+                    download={m.file.name}
+                    className="text-blue-600 underline"
+                  >
+                    📎 {m.file.name} ({Math.round(m.file.size / 1024)} KB)
+                  </a>
+                ) : (
+                  m.text
+                )}
                 <span className="ml-1 text-[10px] text-gray-400">
                   {new Date(m.time).toLocaleTimeString([], {
                     hour: "2-digit",
@@ -1060,18 +1810,58 @@ const MeetContent = () => {
               </p>
             ))}
           </div>
-          <div className="flex gap-2">
+
+          {showEmoji && (
+            <div className="flex flex-wrap gap-1">
+              {EMOJIS.map((e) => (
+                <button
+                  key={e}
+                  onClick={() => setChatText((t) => t + e)}
+                  className="rounded border px-2 py-1 text-lg"
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setShowEmoji(!showEmoji)}
+              className="rounded-full border px-3 py-2 text-sm"
+              title="Emojis"
+            >
+              😀
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!inCall}
+              className="rounded-full border px-3 py-2 text-sm disabled:opacity-50"
+              title={`Share a file (max ${MAX_FILE_MB} MB)`}
+            >
+              <Paperclip size={16} />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) sendFile(f);
+                e.target.value = "";
+              }}
+            />
             <input
               value={chatText}
               onChange={(e) => setChatText(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendChat()}
-              placeholder="Type a message..."
-              disabled={!inCall}
-              className="flex-1 rounded-full border px-4 py-2 text-sm outline-none disabled:opacity-50"
+              placeholder={myCanChat ? "Type a message..." : "Chat disabled by host"}
+              disabled={!inCall || !myCanChat}
+              className="min-w-[8rem] flex-1 rounded-full border px-4 py-2 text-sm outline-none disabled:opacity-50"
             />
             <button
               onClick={sendChat}
-              disabled={!inCall}
+              disabled={!inCall || !myCanChat}
               className="rounded-full bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
             >
               Send
@@ -1081,6 +1871,11 @@ const MeetContent = () => {
       )}
 
       <p className="text-center text-xs text-gray-500">{status}</p>
+      <p className="text-center text-[11px] text-gray-400">
+        🔒 Media is sent peer-to-peer and encrypted end-to-end by WebRTC
+        (DTLS-SRTP). Only signed-in users can join, the host can lock the room,
+        and a room holds a maximum of {MAX_PEOPLE} participants.
+      </p>
     </main>
   );
 };
