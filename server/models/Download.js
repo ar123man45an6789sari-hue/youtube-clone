@@ -18,10 +18,19 @@ const downloadSchema = new mongoose.Schema(
     plan: { type: String, default: "Free" }, // plan used at download time
     ip: { type: String, default: "unknown" },
     browser: { type: String, default: "Unknown" },
+    browserFull: { type: String, default: "" },
     os: { type: String, default: "Unknown" },
     deviceType: { type: String, default: "Desktop" },
+    deviceModel: { type: String, default: "Unknown" },
+    deviceToken: { type: String, default: "" }, // which registered browser/device
+    city: { type: String, default: "Unknown" },
+    state: { type: String, default: "Unknown" },
+    country: { type: String, default: "Unknown" },
     fileSize: { type: Number, default: 0 }, // in bytes
+    // success | blocked (quota/plan) | failed (interrupted) | re-download
     status: { type: String, default: "success" },
+    note: { type: String, default: "" }, // why a download was blocked or failed
+    countsAgainstQuota: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

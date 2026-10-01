@@ -53,6 +53,12 @@ const DownloadsPage = () => {
   const limit = data?.limit || 0;
   const remaining = data?.remainingToday || 0;
   const used = Math.max(0, limit - remaining);
+  const statusColor = (s: string) =>
+    s === "success"
+      ? "text-green-600"
+      : s === "blocked"
+      ? "text-orange-600"
+      : "text-red-600";
 
   return (
     <main className="mx-auto max-w-4xl space-y-8 p-6">
@@ -77,8 +83,28 @@ const DownloadsPage = () => {
             style={{ width: limit ? `${(used / limit) * 100}%` : "0%" }}
           />
         </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-500 sm:grid-cols-4">
+          <p>Monthly left: {data?.remainingMonth ?? 0} / {data?.monthlyLimit ?? 0}</p>
+          <p>
+            Plan valid till:{" "}
+            {data?.planExpiry
+              ? new Date(data.planExpiry).toLocaleDateString()
+              : "Free plan"}
+          </p>
+          <p>
+            Devices used: {data?.devices ?? 0} / {data?.maxDevices ?? 3}
+          </p>
+          <p>
+            Quota resets:{" "}
+            {data?.resetsAt ? new Date(data.resetsAt).toLocaleString() : "midnight"}
+          </p>
+        </div>
         <p className="mt-2 text-xs text-gray-500">
-          Quota resets at the start of each new day.
+          Free users get 1 download per day. Upgrade from the{" "}
+          <Link href="/pricing" className="font-medium text-blue-600 hover:underline">
+            pricing page
+          </Link>{" "}
+          for more.
         </p>
       </section>
 
@@ -111,17 +137,24 @@ const DownloadsPage = () => {
               <p className="truncate font-medium">{d.title || "Untitled video"}</p>
               <p className="text-xs text-gray-500">
                 {new Date(d.createdAt).toLocaleString()} • {formatSize(d.fileSize)} •{" "}
-                {d.plan} plan • {d.deviceType}
+                {d.plan} plan • {d.deviceType} ({d.browserFull || d.browser}) •{" "}
+                {d.city !== "Unknown" ? `${d.city}, ${d.country} • ` : ""}IP {d.ip}
+              </p>
+              <p className={`text-xs font-semibold ${statusColor(d.status)}`}>
+                {String(d.status).toUpperCase()}
+                {d.note ? ` — ${d.note}` : ""}
               </p>
             </div>
-            <a
-              href={d.videoUrl}
-              target="_blank"
-              rel="noopener"
-              className="rounded-full bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-            >
-              Re-download
-            </a>
+            {d.status === "success" && d.videoUrl && (
+              <a
+                href={d.videoUrl}
+                target="_blank"
+                rel="noopener"
+                className="rounded-full bg-blue-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+              >
+                Re-download
+              </a>
+            )}
           </div>
         ))}
       </section>

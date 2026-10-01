@@ -63,10 +63,17 @@ const VideoPageClient = ({
     setDownloading(true);
     setDlMsg("");
     try {
+      // the same browser id we use for trusted devices (device limit check)
+      let deviceToken = localStorage.getItem("deviceToken");
+      if (!deviceToken) {
+        deviceToken = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem("deviceToken", deviceToken);
+      }
+
       const res = await fetch(`${API}/api/downloads`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user._id, videoId: video._id }),
+        body: JSON.stringify({ userId: user._id, videoId: video._id, deviceToken }),
       });
       const data = await res.json();
       if (data.success) {
@@ -75,16 +82,42 @@ const VideoPageClient = ({
           limit: data.data.limit,
           plan: data.data.plan,
         });
-        const a = document.createElement("a");
-        a.href = data.data.download.videoUrl;
-        a.target = "_blank";
-        a.rel = "noopener";
-        a.download = data.data.download.title || "video";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
+        // real file download: fetch the video, then save it from memory so an
+        // interrupted download can be reported back to the server
+        const record = data.data.download;
+        try {
+          const fileRes = await fetch(record.videoUrl);
+          if (!fileRes.ok) throw new Error("file request failed");
+          const blob = await fileRes.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${record.title || "video"}.mp4`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        } catch {
+          // mark the record as failed so it does not eat the user's quota
+          fetch(`${API}/api/downloads/${record._id}/status`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              status: "failed",
+              note: "Download interrupted in the browser",
+            }),
+          }).catch(() => {});
+          setDlOk(false);
+          setDlMsg("Download was interrupted. It did not use your quota - please retry.");
+          return;
+        }
+
         setDlOk(true);
-        setDlMsg(`Download started! ${data.data.remainingToday} downloads left today.`);
+        setDlMsg(
+          data.data.duplicate
+            ? `Re-download of the same video - your quota was not used again. ${data.data.remainingToday} left today.`
+            : `Download finished! ${data.data.remainingToday} downloads left today.`
+        );
       } else {
         setDlOk(false);
         setDlMsg(data.message || "Download failed.");
@@ -191,6 +224,25 @@ const VideoPageClient = ({
             My Downloads
           </Link>
         </div>
+
+        {/* keyboard shortcut help for desktop users */}
+        <details className="mt-4 rounded-xl border p-4 text-sm">
+          <summary className="cursor-pointer font-medium">
+            Keyboard shortcuts &amp; player tips
+          </summary>
+          <div className="mt-3 grid grid-cols-1 gap-1 text-xs text-gray-500 sm:grid-cols-2">
+            <p>Space / K — play or pause</p>
+            <p>← / → (J / L) — seek 10 seconds</p>
+            <p>Shift + ← / → — seek 30 seconds</p>
+            <p>↑ / ↓ — volume up or down</p>
+            <p>M — mute, C — subtitles</p>
+            <p>F — full screen, T — theater mode</p>
+            <p>P — picture in picture, N — next video</p>
+            <p>&lt; / &gt; — slower or faster playback</p>
+            <p>Hover the timeline — frame preview</p>
+            <p>Controls hide after 3 seconds of no mouse movement</p>
+          </div>
+        </details>
 
         <CommentSection videoId={video._id} />
       </div>
