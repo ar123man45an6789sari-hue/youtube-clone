@@ -28,7 +28,7 @@ type SidebarProps = {
 const mainLinks = [
   { icon: Home, label: "Home", href: "/" },
   { icon: Flame, label: "Trending", href: "/" },
-  { icon: PlaySquare, label: "Subscriptions", href: "/subscriptions" },
+  { icon: PlaySquare, label: "Subscription", href: "/subscription" },
   { icon: Video, label: "Video Meet", href: "/meet" },
 ];
 
