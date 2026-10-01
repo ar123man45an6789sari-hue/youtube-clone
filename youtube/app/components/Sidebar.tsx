@@ -18,6 +18,8 @@ import {
   ShieldCheck,
   Download,
   Video,
+  Crown,
+  CreditCard,
 } from "lucide-react";
 
 type SidebarProps = {
@@ -37,6 +39,8 @@ const personalLinks = [
   { icon: Clock, label: "Watch Later", href: "/watch-later" },
   { icon: ThumbsUp, label: "Liked Videos", href: "/liked" },
   { icon: Download, label: "Downloads", href: "/downloads" },
+  { icon: Crown, label: "My Subscription", href: "/subscription" },
+  { icon: CreditCard, label: "Plans & Pricing", href: "/pricing" },
   { icon: ShieldCheck, label: "Security", href: "/security" },
 ];
 const exploreLinks = [

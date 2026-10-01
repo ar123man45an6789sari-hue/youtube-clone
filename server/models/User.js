@@ -32,6 +32,9 @@ const userSchema = new mongoose.Schema(
     plan: { type: String, default: "Free" }, // Free | Bronze | Silver | Gold
     planStart: { type: Date, default: null },
     planExpiry: { type: Date, default: null },
+    planCycle: { type: String, default: "" }, // monthly | quarterly | yearly
+    autoRenew: { type: Boolean, default: true },
+    cancelledAt: { type: Date, default: null },
   },
   { timestamps: true } 
 );
