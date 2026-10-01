@@ -56,9 +56,10 @@ const LoginPage = () => {
       })
     );
     const autoTheme = istHour >= 5 && istHour < 12 ? "light" : "dark";
-    const finalTheme =
-      user.themeAuto === false && user.theme ? user.theme : autoTheme;
-    applyTheme(finalTheme, false);
+    // a saved manual preference follows the user to any device/browser
+    const manual = user.themeAuto === false && Boolean(user.theme);
+    const finalTheme = manual ? user.theme : autoTheme;
+    applyTheme(finalTheme, manual);
 
     if (user.themeAuto !== false) {
       fetch(`${API}/api/users/${user._id}/theme`, {

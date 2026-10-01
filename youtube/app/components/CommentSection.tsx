@@ -15,6 +15,11 @@ type Comment = {
   dislikes?: string[];
   editedAt?: string | null;
   createdAt: string;
+  avatar?: string;
+  city?: string;
+  country?: string;
+  lang?: string;
+  deleted?: boolean;
 };
 
 type CommentSectionProps = {
@@ -47,6 +52,7 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
   const [translated, setTranslated] = useState<Record<string, string>>({});
   const [showTrans, setShowTrans] = useState<Record<string, boolean>>({});
   const [prefLang, setPrefLang] = useState("en");
+  const [mentionList, setMentionList] = useState<string[]>([]);
 
   // anti-spam captcha state
   const [postCount, setPostCount] = useState(0);
@@ -119,6 +125,7 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
           videoId,
           userId: user._id,
           userName: user.name || user.email?.split("@")[0],
+          avatar: (user as any).avatar || "",
           text: newComment,
         }),
       });
@@ -152,6 +159,7 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
           videoId,
           userId: user._id,
           userName: user.name || user.email?.split("@")[0],
+          avatar: (user as any).avatar || "",
           text: replyText,
           parentId,
         }),
@@ -203,7 +211,11 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
       const res = await fetch(`${API}/api/comments/${commentId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user?._id, text: editText }),
+        body: JSON.stringify({
+          userId: user?._id,
+          text: editText,
+          knownEditedAt: comments.find((c) => c._id === commentId)?.editedAt || "",
+        }),
       });
 
       const data = await res.json();
@@ -228,8 +240,11 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
       });
 
       const data = await res.json();
-      if (data.success) {
-        setComments(comments.filter((c) => c._id !== commentId && c.parentId !== commentId));
+      if (data.success && data.softDeleted) {
+        // comment had replies, so it stays as a placeholder
+        setComments(comments.map((c) => (c._id === commentId ? data.data : c)));
+      } else if (data.success) {
+        setComments(comments.filter((c) => c._id !== commentId));
       } else {
         showMessage(data.message);
       }
@@ -271,8 +286,10 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
         `https://translate.googleapis.com/translate_a/single?client=gtx` +
         `&sl=auto&tl=${prefLang}&dt=t&q=${encodeURIComponent(c.text)}`;
       const res = await fetch(url);
+      if (!res.ok) throw new Error("translation request failed");
       const data = await res.json();
       const text = data[0].map((part: any) => part[0]).join("");
+      if (!text) throw new Error("empty translation");
       setTranslated({ ...translated, [key]: text });
       setShowTrans({ ...showTrans, [key]: true });
     } catch (error) {
@@ -281,12 +298,32 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
     }
   };
 
+  // @mention helper: suggest the people who already commented here
+  const handleMentionTyping = (value: string) => {
+    const match = value.match(/@([A-Za-z0-9_]*)$/);
+    if (!match) {
+      setMentionList([]);
+      return;
+    }
+    const search = match[1].toLowerCase();
+    const names = Array.from(
+      new Set(comments.map((c) => (c.userName || "").replace(/\s+/g, "_")))
+    ).filter((n) => n && n.toLowerCase().startsWith(search));
+    setMentionList(names.slice(0, 5));
+  };
+
+  const applyMention = (name: string) => {
+    setNewComment((prev) => prev.replace(/@([A-Za-z0-9_]*)$/, `@${name} `));
+    setMentionList([]);
+  };
+
   const canEdit = (c: Comment) =>
     !!user &&
+    !c.deleted &&
     c.userId === user._id &&
     (Date.now() - new Date(c.createdAt).getTime()) / 60000 <= EDIT_LIMIT_MIN;
 
-  const canDelete = (c: Comment) => !!user && c.userId === user._id;
+  const canDelete = (c: Comment) => !!user && c.userId === user._id && !c.deleted;
    // highlight @mentions in comment text
   const renderText = (text: string) => {
     const parts = text.split(/(@[A-Za-z0-9_]+)/g);
@@ -305,13 +342,33 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
   const renderComment = (c: Comment, isReply: boolean) => (
  
     <div key={c._id} className={`flex gap-3 ${isReply ? "ml-12" : ""}`}>
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-300 text-sm font-medium text-gray-700">
-        {c.userName.charAt(0).toUpperCase()}
-      </div>
+      {c.avatar ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={c.avatar}
+          alt={c.userName}
+          className="h-9 w-9 shrink-0 rounded-full object-cover"
+        />
+      ) : (
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-300 text-sm font-medium text-gray-700">
+          {c.userName.charAt(0).toUpperCase()}
+        </div>
+      )}
       <div className="flex-1">
         <div className="flex items-center gap-2">
           <p className="text-sm font-semibold">{c.userName}</p>
-         <span className="text-xs text-gray-500">
+          {c.city && (
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600">
+              📍 {c.city}
+              {c.country ? `, ${c.country}` : ""}
+            </span>
+          )}
+          {c.lang && (
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] uppercase text-gray-600">
+              {c.lang}
+            </span>
+          )}
+          <span className="text-xs text-gray-500">
             {new Date(c.createdAt).toLocaleString()}
           </span>
           {c.editedAt && <span className="text-xs text-gray-400">(edited)</span>}
@@ -341,7 +398,7 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
             </div>
           </div>
         ) : (
-         <p className="mt-1 text-sm text-gray-800">{renderText(c.text)}</p>
+         <p className="mt-1 text-sm">{renderText(c.text)}</p>
         )}
                  {/* translated text box (current preferred language) */}
         {showTrans[`${c._id}:${prefLang}`] && translated[`${c._id}:${prefLang}`] && (
@@ -454,8 +511,18 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
             }}
             className="rounded-lg border px-2 py-1 text-sm"
           >
-            <option value="en">Translate: English</option>
-            <option value="hi">Translate: Hindi</option>
+            <option value="en">Translate to: English</option>
+            <option value="hi">Translate to: Hindi</option>
+            <option value="bn">Translate to: Bengali</option>
+            <option value="ta">Translate to: Tamil</option>
+            <option value="te">Translate to: Telugu</option>
+            <option value="mr">Translate to: Marathi</option>
+            <option value="ur">Translate to: Urdu</option>
+            <option value="ar">Translate to: Arabic</option>
+            <option value="es">Translate to: Spanish</option>
+            <option value="fr">Translate to: French</option>
+            <option value="de">Translate to: German</option>
+            <option value="ja">Translate to: Japanese</option>
           </select>
           <select
             value={sort}
@@ -484,13 +551,31 @@ export default function CommentSection({ videoId }: CommentSectionProps) {
             <input
               type="text"
               value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Add a comment..."
+              onChange={(e) => {
+                setNewComment(e.target.value);
+                handleMentionTyping(e.target.value);
+              }}
+              placeholder="Add a comment... (use @ to mention someone)"
               className="w-full border-b border-gray-300 bg-transparent pb-2 text-sm focus:border-black focus:outline-none transition-colors"
               disabled={isLoading}
             />
 
           
+            {mentionList.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-2">
+                {mentionList.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => applyMention(n)}
+                    className="rounded-full border px-3 py-1 text-xs hover:bg-gray-100"
+                  >
+                    @{n}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {captchaQ && (
               <div className="mt-2 flex items-center gap-2 rounded-lg bg-yellow-50 px-3 py-2 text-sm">
                 <span className="font-medium">🤖 {captchaQ}</span>

@@ -4,6 +4,7 @@ import {
   verifyPayment,
   getUserTransactions,
   recordFailedPayment,
+  cancelSubscription,
 } from "../controllers/paymentController.js";
 
 const router = express.Router();
@@ -19,5 +20,8 @@ router.route("/user/:userId").get(getUserTransactions);
 
 // POST = record a failed/cancelled payment attempt
 router.route("/failed").post(recordFailedPayment);
+
+// POST = cancel the running subscription
+router.route("/cancel").post(cancelSubscription);
 
 export default router;

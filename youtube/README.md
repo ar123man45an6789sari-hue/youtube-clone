@@ -28,21 +28,46 @@ multilingual comments and a custom video player).
 - Authentication: signup, login, forgot/reset password, session context
 
 ### Internship tasks
-- Task 1 — Group video calling (PeerJS mesh, up to 4 participants) with host
-  controls: lock room, remove user, mute/unmute-all, co-host assignment,
-  room chat, raise hand, screen share and session-end broadcast
-- Task 2 — Controlled downloads: plan-based daily quota, download records
-  and a downloads library page
-- Task 3 — Subscription plans (Free/Bronze/Silver/Gold), Razorpay test
-  payments with signature verification, billing history, confirmation
-  emails and automatic expiry downgrade
-- Task 4 — Custom video player (see above)
-- Task 5 — Security: new-device OTP login over real Gmail, trusted devices,
-  login history with IP/location/browser, security page, IST-based automatic
-  theme with manual override
-- Task 6 — Comment safety and translation: MyMemory translation button,
-  profanity filter, spam rate-limit with captcha, link/emoji-flood blocking,
-  reporting with admin moderation list
+- Task 1 — Real-time video calling (PeerJS mesh, WebRTC DTLS-SRTP encryption,
+  up to 4 participants). Sign-in required, lobby with "new meeting" or
+  "join with room ID"/invite link, mute/unmute, camera on/off, front/rear
+  camera switch, screen share, raise hand, participant list, speaking
+  indicator, per-participant mic/camera status, connection-quality meter,
+  call duration, in-call chat with emojis and file sharing, local call
+  recording, data-saver (low bandwidth) mode, noise suppression, reconnect
+  after network drops/refresh, permission-denied handling, max participant
+  limit, and host moderation: mute one/all, remove, lock room, assign
+  co-host, allow or block chat and screen share per participant
+- Task 2 — Controlled downloads: plan-based daily AND monthly quota,
+  duplicate (24h) re-downloads that do not consume quota, blocked/failed/
+  interrupted download records, registered-device limit, expiry downgrade,
+  full audit log (user, video, time, IP, city, browser, OS, device, plan)
+  and a downloads library page with the remaining quota meter
+- Task 3 — Subscription plans (Free/Bronze/Silver/Gold) with monthly,
+  quarterly and yearly billing cycles, feature comparison table, Razorpay
+  test payments with signature verification, duplicate-payment protection,
+  failed/cancelled payment records, renewal that extends the remaining days,
+  cancel (stop renewal or downgrade now), billing history with invoice,
+  order and payment ids, invoice confirmation email and automatic expiry
+  downgrade to Free with data preserved
+- Task 4 — Custom HTML5 player: play/pause, draggable volume, mute, speeds
+  (0.5x-2x) with a menu, 10s seek, theater, fullscreen, PiP, captions,
+  buffered bar, remaining time, quality info, loading spinner, resume from
+  last position, periodic progress saving, completion marking, autoplay
+  countdown with cancel, timeline frame previews, auto-hiding controls,
+  only one video can play at a time, and full keyboard shortcuts
+- Task 5 — Security: IST time-based theme (5 AM-12 PM light, else dark) saved
+  in the profile with manual override, OTP over real Gmail on a new device,
+  browser, IP address, city or state, trusted devices for 7 days, login
+  history with public IP, browser + version, OS, device type/model, city,
+  state, country, failed password and failed OTP records, and a security
+  page with session management
+- Task 6 — Comments: multilingual translation (12 languages), username,
+  avatar, location, time and edited status, likes/dislikes, replies,
+  @mention suggestions, edit window with conflict detection, soft delete
+  that keeps replies, sorting, profanity filter, duplicate and spam
+  rate-limiting with captcha, emoji/symbol flood and link blocking,
+  reporting with reasons and an admin moderation queue with action logs
 
 ## Project Structure
 - `youtube/` — Next.js frontend (app router pages, components, context, lib)

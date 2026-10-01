@@ -1,11 +1,36 @@
 import User from "../models/User.js";
 import LoginHistory from "../models/LoginHistory.js";
 import TrustedDevice from "../models/TrustedDevice.js";
+import { getClientInfo } from "../utils/clientInfo.js";
+import bcrypt from "bcryptjs";
+
+// passwords are stored hashed; old plain-text accounts still work and are
+// upgraded to a hash the next time the user logs in
+const isHashed = (value = "") => value.startsWith("$2");
+
+export const hashPassword = async (plain) => bcrypt.hash(plain, 10);
+
+// never return secrets to the browser
+const safeUser = (user) => {
+  if (!user) return user;
+  const obj = user.toObject ? user.toObject() : { ...user };
+  delete obj.password;
+  delete obj.otpCode;
+  delete obj.otpExpires;
+  return obj;
+};
+
+const passwordMatches = async (plain, stored) => {
+  if (!stored) return false;
+  if (isHashed(stored)) return bcrypt.compare(plain, stored);
+  return plain === stored;
+};
 
 // fetch all users from the database
 const getUsers = async (req, res) => {
   try {
-        const users = await User.find({});
+        // never send password hashes or OTP codes to the browser
+    const users = await User.find({}).select("-password -otpCode -otpExpires");
     for (const u of users) {
       await applyExpiryCheck(u);
     }
@@ -18,7 +43,12 @@ const getUsers = async (req, res) => {
 // save a new user in the database
 const createUser = async (req, res) => {
   try {
-    const newUser = await User.create(req.body);
+    const body = { ...req.body };
+    if (body.password) body.password = await hashPassword(body.password);
+    const created = await User.create(body);
+    const newUser = await User.findById(created._id).select(
+      "-password -otpCode -otpExpires"
+    );
     res.status(201).json({ success: true, data: newUser });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -34,7 +64,7 @@ const updateUserTheme = async (req, res) => {
       req.params.id,
       { theme, themeAuto },
       { new: true }
-    );
+    ).select("-password -otpCode -otpExpires");
 
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
@@ -87,61 +117,9 @@ const sendOtpEmail = async (to, code) => {
   }
 };
 
-// collect device and location info from user-agent and geo service
-const getDeviceInfo = async (req) => {
-  let ip = "unknown";
-  let city = "Unknown";
-  let state = "Unknown";
-  let country = "Unknown";
+// device + location info of the real visitor (shared helper)
+const getDeviceInfo = async (req) => getClientInfo(req);
 
-  try {
-    // 3 second timeout so login never waits on the geo service
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3000);
-    const geoRes = await fetch("http://ip-api.com/json/", {
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    const geo = await geoRes.json();
-    if (geo.status === "success") {
-      ip = geo.query;
-      city = geo.city;
-      state = geo.regionName;
-      country = geo.country;
-    }
-  } catch (error) {
-    console.log("Geo lookup failed:", error.message);
-  }
-
-  const ua = req.headers["user-agent"] || "";
-  const browser = ua.includes("Edg")
-    ? "Edge"
-    : ua.includes("Chrome")
-    ? "Chrome"
-    : ua.includes("Firefox")
-    ? "Firefox"
-    : ua.includes("Safari")
-    ? "Safari"
-    : "Unknown";
-  const os = ua.includes("Windows")
-    ? "Windows"
-    : ua.includes("Mac")
-    ? "macOS"
-    : ua.includes("Android")
-    ? "Android"
-    : ua.includes("iPhone")
-    ? "iOS"
-    : ua.includes("Linux")
-    ? "Linux"
-    : "Unknown";
-  const deviceType = /Mobi|Android|iPhone/i.test(ua)
-    ? "Mobile"
-    : /Tablet|iPad/i.test(ua)
-    ? "Tablet"
-    : "Desktop";
-
-  return { ip, city, state, country, browser, os, deviceType };
-};
 // if the plan has expired, downgrade the user back to Free (data preserved)
 const applyExpiryCheck = async (user) => {
   if (
@@ -163,12 +141,31 @@ const loginUser = async (req, res) => {
     const { email, password, deviceToken } = req.body;
 
     const user = await User.findOne({ email });
-    if (!user || user.password !== password) {
+    const ok = user ? await passwordMatches(password, user.password) : false;
+    if (!user || !ok) {
+      // wrong password attempts are also saved for the security page
+      if (user) {
+        const badInfo = await getDeviceInfo(req);
+        await LoginHistory.create({
+          userId: user._id,
+          ...badInfo,
+          trusted: false,
+          status: "failed",
+          reason: "Wrong password",
+          deviceToken: deviceToken || "",
+        });
+      }
       return res
         .status(401)
         .json({ success: false, message: "Invalid email or password!" });
     }
         await applyExpiryCheck(user);
+
+    // silently move old plain-text passwords to a hash
+    if (!isHashed(user.password)) {
+      user.password = await hashPassword(password);
+      await user.save();
+    }
 
     const info = await getDeviceInfo(req);
     const token = deviceToken || "";
@@ -180,18 +177,49 @@ const loginUser = async (req, res) => {
       trustedUntil: { $gt: new Date() },
     });
 
-    if (trusted) {
+    // OTP is skipped only when the device is trusted AND the browser,
+    // ip and city still match what we saved for that device
+    let reason = "";
+    if (!trusted) {
+      reason = "New device or browser detected";
+    } else if (trusted.browser !== info.browser) {
+      reason = `New browser detected (${info.browser})`;
+    } else if (
+      trusted.ip &&
+      trusted.ip !== "unknown" &&
+      info.ip !== "unknown" &&
+      trusted.ip !== info.ip
+    ) {
+      reason = `New IP address detected (${info.ip})`;
+    } else if (
+      trusted.city !== "Unknown" &&
+      info.city !== "Unknown" &&
+      trusted.city !== info.city
+    ) {
+      reason = `New city detected (${info.city})`;
+    } else if (
+      trusted.state !== "Unknown" &&
+      info.state !== "Unknown" &&
+      trusted.state !== info.state
+    ) {
+      reason = `New state detected (${info.state})`;
+    }
+
+    if (trusted && !reason) {
+      trusted.lastUsedAt = new Date();
+      await trusted.save();
       await LoginHistory.create({
         userId: user._id,
         ...info,
         trusted: true,
         status: "success",
+        reason: "Trusted device",
         deviceToken: token,
       });
-      return res.status(200).json({ success: true, data: user });
+      return res.status(200).json({ success: true, data: safeUser(user) });
     }
 
-    // new device -> generate an OTP code
+    // new device / new browser / new ip / new city -> generate an OTP code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     user.otpCode = code;
     user.otpExpires = new Date(Date.now() + 10 * 60000); // valid for 10 minutes
@@ -211,15 +239,17 @@ const loginUser = async (req, res) => {
       ...info,
       trusted: false,
       status: "otp_sent",
+      reason,
       deviceToken: token,
     });
 
     res.status(200).json({
       success: true,
       otpRequired: true,
+      reason,
       message: emailed
-        ? "OTP sent to your registered email!"
-        : "New device detected! Verify with the code shown below.",
+        ? `${reason}. OTP sent to your registered email!`
+        : `${reason}. Verify with the code shown below.`,
       demoOtp: emailed ? undefined : code,
     });
   } catch (error) {
@@ -280,6 +310,8 @@ const verifyOtp = async (req, res) => {
       ? {
           ip: lastAttempt.ip,
           browser: lastAttempt.browser,
+          browserFull: lastAttempt.browserFull,
+          deviceModel: lastAttempt.deviceModel,
           os: lastAttempt.os,
           deviceType: lastAttempt.deviceType,
           city: lastAttempt.city,
@@ -289,6 +321,8 @@ const verifyOtp = async (req, res) => {
       : {
           ip: "unknown",
           browser: "Unknown",
+          browserFull: "Unknown",
+          deviceModel: "Unknown",
           os: "Unknown",
           deviceType: "Unknown",
           city: "Unknown",
@@ -296,15 +330,26 @@ const verifyOtp = async (req, res) => {
           country: "Unknown",
         };
 
-    // mark this device trusted for 7 days
-    await TrustedDevice.create({
-      userId: user._id,
-      deviceToken: token,
-      browser: info.browser,
-      os: info.os,
-      city: info.city,
-      trustedUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    });
+    // mark this device trusted for 7 days (one record per browser token)
+    await TrustedDevice.findOneAndUpdate(
+      { userId: user._id, deviceToken: token },
+      {
+        userId: user._id,
+        deviceToken: token,
+        browser: info.browser,
+        browserFull: info.browserFull || info.browser,
+        os: info.os,
+        deviceType: info.deviceType,
+        deviceModel: info.deviceModel,
+        ip: info.ip,
+        city: info.city,
+        state: info.state,
+        country: info.country,
+        lastUsedAt: new Date(),
+        trustedUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+      { upsert: true, new: true }
+    );
 
     await LoginHistory.create({
       userId: user._id,
@@ -314,7 +359,7 @@ const verifyOtp = async (req, res) => {
       deviceToken: token,
     });
 
-    res.status(200).json({ success: true, data: user });
+    res.status(200).json({ success: true, data: safeUser(user) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -373,7 +418,9 @@ const updateSubscription = async (req, res) => {
       update.planExpiry = new Date(now.getTime() + (months || 1) * 30 * 24 * 60 * 60 * 1000);
     }
 
-    const user = await User.findByIdAndUpdate(req.params.id, update, { new: true });
+    const user = await User.findByIdAndUpdate(req.params.id, update, {
+      new: true,
+    }).select("-password -otpCode -otpExpires");
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found" });
     }

@@ -27,6 +27,7 @@ type CustomVideoPlayerProps = {
   thumbnail?: string; // real thumbnail shown as poster before the video plays
   nextVideo?: NextVideo | null; // used for the autoplay countdown
   onTheaterChange?: (on: boolean) => void; // tells the page layout about theater mode
+  completeAt?: number; // watch percentage that marks a video as completed
 };
 
 // Helper: converts seconds into 1:05 style time
@@ -46,6 +47,7 @@ const CustomVideoPlayer = ({
   thumbnail,
   nextVideo,
   onTheaterChange,
+  completeAt = 0.9, // 90% watched = completed (configurable)
 }: CustomVideoPlayerProps) => {
   const router = useRouter();
 
@@ -53,6 +55,8 @@ const CustomVideoPlayer = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<any>(null);
+  const previewRef = useRef<HTMLVideoElement>(null); // hidden video for frame previews
+  const previewTimer = useRef<any>(null);
 
   // simple states for UI
   const [playing, setPlaying] = useState(false);
@@ -70,6 +74,7 @@ const CustomVideoPlayer = ({
   const [quality, setQuality] = useState(""); // e.g. "720p"
   const [countdown, setCountdown] = useState<number | null>(null); // autoplay timer
   const [hoverInfo, setHoverInfo] = useState<{ x: number; time: number } | null>(null);
+  const [speedMenu, setSpeedMenu] = useState(false);
 
   /* ---------- basic controls ---------- */
 
@@ -110,6 +115,17 @@ const CustomVideoPlayer = ({
     const nextIndex = (speedIndex + 1) % SPEEDS.length;
     setSpeedIndex(nextIndex);
     video.playbackRate = SPEEDS[nextIndex];
+  };
+
+  // pick an exact speed from the menu (0.5x ... 2x)
+  const pickSpeed = (value: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    const index = SPEEDS.indexOf(value);
+    if (index === -1) return;
+    setSpeedIndex(index);
+    video.playbackRate = value;
+    setSpeedMenu(false);
   };
 
   const toggleFullscreen = () => {
@@ -204,6 +220,25 @@ const CustomVideoPlayer = ({
         toggleCaptions();
       } else if (e.key === "n") {
         playNext();
+      } else if (e.key === ">" || e.key === ".") {
+        // faster playback
+        const video = videoRef.current;
+        const next = Math.min(SPEEDS.length - 1, speedIndex + 1);
+        setSpeedIndex(next);
+        if (video) video.playbackRate = SPEEDS[next];
+      } else if (e.key === "<" || e.key === ",") {
+        // slower playback
+        const video = videoRef.current;
+        const next = Math.max(0, speedIndex - 1);
+        setSpeedIndex(next);
+        if (video) video.playbackRate = SPEEDS[next];
+      } else if (e.key === "k") {
+        e.preventDefault();
+        togglePlay();
+      } else if (e.key === "j") {
+        seekBy(-10);
+      } else if (e.key === "l") {
+        seekBy(10);
       }
       wakeUpControls();
     };
@@ -211,6 +246,20 @@ const CustomVideoPlayer = ({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [volume, theater, speedIndex, ccOn, nextVideo]);
+
+  /* ---------- only one video can play on the whole site ---------- */
+
+  useEffect(() => {
+    const stopOthers = (e: Event) => {
+      const playing = e.target as HTMLVideoElement;
+      document.querySelectorAll("video").forEach((other) => {
+        if (other !== playing && !other.paused) other.pause();
+      });
+    };
+    // capture = we also catch players rendered by other components
+    document.addEventListener("play", stopOthers, true);
+    return () => document.removeEventListener("play", stopOthers, true);
+  }, []);
 
   /* ---------- keep fullscreen state in sync ---------- */
 
@@ -267,7 +316,7 @@ const CustomVideoPlayer = ({
       localStorage.setItem(`duration-${videoId}`, String(video.duration || 0));
     }
     // mark video as completed after 90% watched
-    if (video.duration && video.currentTime / video.duration > 0.9) {
+    if (video.duration && video.currentTime / video.duration > completeAt) {
       localStorage.setItem(`completed-${videoId}`, "true");
     }
   };
@@ -293,7 +342,21 @@ const CustomVideoPlayer = ({
   const handleTimelineHover = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-    setHoverInfo({ x: ratio * rect.width, time: ratio * duration });
+    const time = ratio * duration;
+    setHoverInfo({ x: ratio * rect.width, time });
+
+    // move the hidden preview video to that second (throttled a little)
+    if (previewTimer.current) clearTimeout(previewTimer.current);
+    previewTimer.current = setTimeout(() => {
+      const preview = previewRef.current;
+      if (preview && !isNaN(time)) {
+        try {
+          preview.currentTime = time;
+        } catch {
+          // seeking before metadata is ready is fine, ignore
+        }
+      }
+    }, 60);
   };
 
   return (
@@ -396,10 +459,20 @@ const CustomVideoPlayer = ({
         >
           {hoverInfo && (
             <div
-              className="pointer-events-none absolute -top-7 rounded bg-black/80 px-2 py-0.5 text-xs text-white"
+              className="pointer-events-none absolute -top-28 flex flex-col items-center"
               style={{ left: hoverInfo.x, transform: "translateX(-50%)" }}
             >
-              {formatTime(hoverInfo.time)}
+              {/* real frame preview of the hovered second */}
+              <video
+                ref={previewRef}
+                src={videoUrl}
+                muted
+                preload="metadata"
+                className="h-20 w-36 rounded border border-white/30 bg-black object-cover"
+              />
+              <span className="mt-1 rounded bg-black/80 px-2 py-0.5 text-xs text-white">
+                {formatTime(hoverInfo.time)}
+              </span>
             </div>
           )}
           <input
@@ -456,13 +529,30 @@ const CustomVideoPlayer = ({
           {/* real video quality info */}
           {quality && <span className="text-xs text-white/70">{quality}</span>}
 
-          <button
-            onClick={changeSpeed}
-            title="Playback speed"
-            className="text-xs font-semibold"
-          >
-            {SPEEDS[speedIndex]}x
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setSpeedMenu(!speedMenu)}
+              title="Playback speed (click for the list)"
+              className="text-xs font-semibold"
+            >
+              {SPEEDS[speedIndex]}x
+            </button>
+            {speedMenu && (
+              <div className="absolute bottom-7 right-0 z-20 w-20 overflow-hidden rounded-lg bg-black/90 text-xs">
+                {SPEEDS.map((sp) => (
+                  <button
+                    key={sp}
+                    onClick={() => pickSpeed(sp)}
+                    className={`block w-full px-3 py-1.5 text-left hover:bg-white/10 ${
+                      SPEEDS[speedIndex] === sp ? "text-red-500" : "text-white"
+                    }`}
+                  >
+                    {sp}x
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           <button
             onClick={toggleCaptions}
