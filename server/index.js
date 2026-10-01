@@ -39,11 +39,13 @@ try {
 if (User) {
   app.put("/api/users/:id", async (req, res) => {
     try {
+      const bcrypt = (await import("bcryptjs")).default;
+      const hashed = await bcrypt.hash(req.body.password, 10);
       const updatedUser = await User.findByIdAndUpdate(
         req.params.id,
-        { password: req.body.password },
+        { password: hashed },
         { new: true }
-      );
+      ).select("-password -otpCode -otpExpires");
       
       if (!updatedUser) {
         return res.status(404).json({ success: false, message: "User not found" });

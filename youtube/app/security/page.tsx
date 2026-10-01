@@ -60,13 +60,37 @@ const SecurityPage = () => {
   const statusColor = (s: string) =>
     s === "success" ? "text-green-600" : s === "otp_sent" ? "text-yellow-600" : "text-red-600";
 
+  // sign out of every trusted device at once (session management)
+  const removeAll = async () => {
+    if (!confirm("Remove all trusted devices? Next login will ask for an OTP.")) return;
+    for (const d of devices) {
+      // eslint-disable-next-line no-await-in-loop
+      await fetch(`${API}/api/users/trusted-devices/${d._id}`, { method: "DELETE" });
+    }
+    load();
+  };
+
   return (
     <main className="mx-auto max-w-4xl space-y-8 p-6">
       <h1 className="text-2xl font-semibold">Account Security </h1>
 
       {/* trusted devices */}
       <section className="space-y-3 rounded-xl border p-5 shadow-sm">
-        <h2 className="font-medium">Trusted Devices</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-medium">Trusted Devices</h2>
+          {devices.length > 0 && (
+            <button
+              onClick={removeAll}
+              className="rounded-full border border-red-300 px-3 py-1 text-xs text-red-600 hover:bg-red-50"
+            >
+              Sign out from all devices
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-gray-500">
+          A trusted device skips the OTP for 7 days. Logging in from a new
+          browser, device, IP address or city always asks for an OTP again.
+        </p>
         {devices.length === 0 && (
           <p className="text-sm text-gray-500">No trusted devices yet.</p>
         )}
@@ -77,10 +101,15 @@ const SecurityPage = () => {
           >
             <div>
               <p className="font-medium">
-                {d.browser} on {d.os}
+                {d.browserFull || d.browser} on {d.os}
+                {d.deviceModel && d.deviceModel !== "Unknown" ? ` • ${d.deviceModel}` : ""}
               </p>
               <p className="text-xs text-gray-500">
-                {d.city} • trusted until {new Date(d.trustedUntil).toLocaleDateString()}
+                {d.deviceType} • {d.city}
+                {d.state && d.state !== "Unknown" ? `, ${d.state}` : ""}
+                {d.country && d.country !== "Unknown" ? `, ${d.country}` : ""} • IP{" "}
+                {d.ip || "unknown"} • trusted until{" "}
+                {new Date(d.trustedUntil).toLocaleDateString()}
               </p>
             </div>
             <button
@@ -103,15 +132,20 @@ const SecurityPage = () => {
           <div key={h._id} className="rounded-lg bg-gray-50 px-4 py-3 text-sm">
             <div className="flex items-center justify-between">
               <p className="font-medium">
-                {h.browser} • {h.os} • {h.deviceType}
+                {h.browserFull || h.browser} • {h.os} • {h.deviceType}
+                {h.deviceModel && h.deviceModel !== "Unknown" ? ` • ${h.deviceModel}` : ""}
               </p>
               <span className={`text-xs font-semibold ${statusColor(h.status)}`}>
                 {h.status}
               </span>
             </div>
             <p className="mt-1 text-xs text-gray-500">
-              {new Date(h.createdAt).toLocaleString()} • {h.city}, {h.state}, {h.country} • IP {h.ip}
+              {new Date(h.createdAt).toLocaleString()} • {h.city}, {h.state},{" "}
+              {h.country} • IP {h.ip}
             </p>
+            {h.reason && (
+              <p className="text-xs text-gray-400">Reason: {h.reason}</p>
+            )}
           </div>
         ))}
       </section>
