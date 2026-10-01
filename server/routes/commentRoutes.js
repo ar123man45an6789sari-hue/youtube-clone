@@ -7,6 +7,7 @@ import {
   deleteComment,
   reportComment,
   getReportedComments,
+  moderateComment,
 } from "../controllers/commentController.js";
 
 const router = express.Router();
@@ -16,6 +17,9 @@ router.route("/reported").get(getReportedComments);
 
 // PUT /api/comments/react/like/:id 
 router.route("/react/:type/:id").put(reactComment);
+
+// PUT /api/comments/moderate/:id (admin action on a reported comment)
+router.route("/moderate/:id").put(moderateComment);
 
 // PUT /api/comments/report/:id
 router.route("/report/:id").put(reportComment);

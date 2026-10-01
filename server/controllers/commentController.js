@@ -1,4 +1,5 @@
 import Comment from "../models/Comment.js";
+import { getClientInfo } from "../utils/clientInfo.js";
 
 // own comment edit  time window (minutes)
 const EDIT_LIMIT_MIN = 10;
@@ -19,7 +20,12 @@ const safeArrays = (comment) => {
 export const getComments = async (req, res) => {
   try {
     const sort = req.query.sort || "newest";
-    const comments = await Comment.find({ video: req.params.videoId }).lean();
+    const comments = (await Comment.find({ video: req.params.videoId }).lean()).map(
+      (c) =>
+        c.hidden
+          ? { ...c, text: "[This comment was removed by a moderator]" }
+          : c
+    );
 
     if (sort === "oldest") {
       comments.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
@@ -105,12 +111,42 @@ export const createComment = async (req, res) => {
       });
     }
 
+    // deleted parent comment should not get new replies
+    if (parentId) {
+      const parent = await Comment.findById(parentId);
+      if (!parent) {
+        return res.status(404).json({
+          success: false,
+          message: "This comment was deleted, you cannot reply to it.",
+        });
+      }
+    }
+
+    // where the comment was posted from (shown next to the username)
+    const info = await getClientInfo(req);
+
+    // simple language guess from the characters used
+    const guessLang = (value) => {
+      if (/[\u0900-\u097F]/.test(value)) return "hi";
+      if (/[\u0600-\u06FF]/.test(value)) return "ar";
+      if (/[\u4E00-\u9FFF]/.test(value)) return "zh";
+      if (/[\u0400-\u04FF]/.test(value)) return "ru";
+      return "en";
+    };
+
+    const mentions = (text.match(/@[A-Za-z0-9_]+/g) || []).map((m) => m.slice(1));
+
     const newComment = await Comment.create({
       video: videoId,
       userId: owner,
       userName,
+      avatar: req.body.avatar || "",
       text,
       parentId: parentId || null,
+      city: info.city === "Unknown" ? "" : info.city,
+      country: info.country === "Unknown" ? "" : info.country,
+      lang: guessLang(text),
+      mentions,
     });
 
     res.status(201).json({ success: true, data: newComment });
@@ -166,12 +202,32 @@ export const updateComment = async (req, res) => {
       return res.status(403).json({ success: false, message: "You can only edit your own comment" });
     }
 
+    if (comment.deleted) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Deleted comments cannot be edited" });
+    }
+
     const minutesOld = (Date.now() - new Date(comment.createdAt)) / 60000;
     if (minutesOld > EDIT_LIMIT_MIN) {
       return res.status(403).json({ success: false, message: "Edit time limit (10 minutes) is over" });
     }
 
+    // simultaneous edit protection: the client sends the version it edited
+    const { knownEditedAt } = req.body;
+    if (
+      knownEditedAt !== undefined &&
+      String(comment.editedAt || "") !== String(knownEditedAt || "")
+    ) {
+      return res.status(409).json({
+        success: false,
+        message: "This comment was just updated somewhere else. Please reload.",
+      });
+    }
+
     comment.text = text;
+    comment.mentions = (text.match(/@[A-Za-z0-9_]+/g) || []).map((m) => m.slice(1));
+    comment.editCount = (comment.editCount || 0) + 1;
     comment.editedAt = new Date();
     await comment.save();
     res.status(200).json({ success: true, data: comment });
@@ -193,7 +249,18 @@ export const deleteComment = async (req, res) => {
       return res.status(403).json({ success: false, message: "You can only delete your own comment" });
     }
 
-    await Comment.deleteMany({ parentId: comment._id });
+    // if replies exist, keep the thread alive with a placeholder (soft delete)
+    const replyCount = await Comment.countDocuments({ parentId: comment._id });
+    if (replyCount > 0) {
+      comment.text = "[This comment was deleted by the author]";
+      comment.deleted = true;
+      comment.mentions = [];
+      await comment.save();
+      return res
+        .status(200)
+        .json({ success: true, softDeleted: true, data: comment });
+    }
+
     await comment.deleteOne();
     res.status(200).json({ success: true, data: { id: comment._id } });
   } catch (error) {
@@ -229,6 +296,34 @@ export const reportComment = async (req, res) => {
     comment.reported = true;
     await comment.save();
 
+    res.status(200).json({ success: true, data: comment });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// moderator action on a reported comment: hide it or dismiss the reports
+export const moderateComment = async (req, res) => {
+  try {
+    const { action, by } = req.body; // action = hide | unhide | dismiss
+    const comment = await Comment.findById(req.params.id);
+    if (!comment) {
+      return res.status(404).json({ success: false, message: "Comment not found" });
+    }
+
+    if (action === "hide") {
+      comment.hidden = true;
+    } else if (action === "unhide") {
+      comment.hidden = false;
+    } else if (action === "dismiss") {
+      comment.reported = false;
+      comment.reports = [];
+    } else {
+      return res.status(400).json({ success: false, message: "Unknown action" });
+    }
+
+    comment.moderation.push({ action, by: by || "admin", at: new Date() });
+    await comment.save();
     res.status(200).json({ success: true, data: comment });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

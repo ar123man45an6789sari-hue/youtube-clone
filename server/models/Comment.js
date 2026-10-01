@@ -32,13 +32,34 @@ const commentSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    avatar: {
+      type: String,
+      default: "", // profile picture url (if the user has one)
+    },
+    city: { type: String, default: "" },   // where the comment was posted from
+    country: { type: String, default: "" },
+    lang: { type: String, default: "" },   // language guess of the comment text
+    mentions: { type: [String], default: [] }, // @usernames inside the text
+    editCount: { type: Number, default: 0 },
     editedAt: {
       type: Date,
       default: null,
     },
+    deleted: {
+      type: Boolean,
+      default: false, // soft delete when the comment already has replies
+    },
     reported: {
       type: Boolean,
       default: false,
+    },
+    hidden: {
+      type: Boolean,
+      default: false, // hidden by a moderator after review
+    },
+    moderation: {
+      type: [{ action: String, by: String, at: Date }],
+      default: [], // full moderation record
     },
     reports: {
       type: [{ reason: String, reportedBy: String, createdAt: Date }],
